@@ -13,14 +13,44 @@ namespace LinkCubeConvert
         [YamlMember(Alias = "proxies")] public List<Dictionary<string, object>> Proxies { get; set; }
         [YamlMember(Alias = "proxy-groups")] public List<ClashProxyGroup> ProxyGroups { get; set; }
     }
-    public class ClashProxyGroup { [YamlMember(Alias = "name")] public string Name { get; set; } [YamlMember(Alias = "type")] public string Type { get; set; } [YamlMember(Alias = "proxies")] public List<string> Proxies { get; set; } }
+    public class ClashProxyGroup
+    {
+        [YamlMember(Alias = "name")] public string Name { get; set; }
+        [YamlMember(Alias = "type")] public string Type { get; set; }
+        [YamlMember(Alias = "proxies")] public List<string> Proxies { get; set; }
+    }
 
     public class SingboxConfig { public LogConfig log { get; set; } = new LogConfig(); public DnsConfig dns { get; set; } = new DnsConfig(); public List<Inbound> inbounds { get; set; } = new List<Inbound>(); public List<Outbound> outbounds { get; set; } = new List<Outbound>(); public RouteConfig route { get; set; } = new RouteConfig(); [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public ExperimentalConfig experimental { get; set; } }
 
     public class LogConfig { public string level { get; set; } = "info"; public bool timestamp { get; set; } = true; }
-    public class DnsConfig { public List<DnsServer> servers { get; set; } = new List<DnsServer>(); public List<DnsRule> rules { get; set; } = new List<DnsRule>(); public string final { get; set; } public string strategy { get; set; } = "ipv4_only"; }
-    public class DnsServer { public string tag { get; set; } public string type { get; set; } public string server { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? server_port { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string detour { get; set; } }
-    public class DnsRule { [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> outbound { get; set; } public string server { get; set; } public bool? disable_cache { get; set; } }
+    public class DnsConfig
+    {
+        public List<DnsServer> servers { get; set; } = new List<DnsServer>();
+        public List<DnsRule> rules { get; set; } = new List<DnsRule>();
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string final { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string strategy { get; set; } = "ipv4_only";
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? independent_cache { get; set; }
+    }
+
+    public class DnsServer
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string tag { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string type { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? server_port { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string detour { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string inet4_range { get; set; }
+    }
+
+    public class DnsRule
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> outbound { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> query_type { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? disable_cache { get; set; }
+    }
     public class Inbound { public string type { get; set; } public string tag { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string listen { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? listen_port { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string interface_name { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> address { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? auto_route { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? strict_route { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string stack { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? sniff { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? mtu { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? endpoint_independent_nat { get; set; } }
     public class Outbound { public string type { get; set; } public string tag { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? server_port { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string password { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> outbounds { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string @default { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OutboundTls tls { get; set; } }
     public class OutboundTls { public bool enabled { get; set; } = true; public string server_name { get; set; } public bool insecure { get; set; } }
@@ -71,7 +101,7 @@ namespace LinkCubeConvert
             sbConfig.outbounds.Add(new Outbound { type = "direct", tag = "DIRECT" });
             sbConfig.outbounds.Add(new Outbound { type = "block", tag = "BLOCK" });
 
-            // 3. 提取机场节点，并单独收集机场域名
+            // 3. 提取机场节点
             HashSet<string> proxyServerDomains = new HashSet<string>();
             List<string> allNodeNames = new List<string>();
 
@@ -85,7 +115,6 @@ namespace LinkCubeConvert
                         string server = p["server"].ToString();
                         allNodeNames.Add(name);
 
-                        // 收集所有的节点域名 (如 linkcubecloud.net 相关)
                         if (!IsIpAddress(server)) proxyServerDomains.Add(server);
 
                         sbConfig.outbounds.Add(new Outbound
@@ -101,14 +130,20 @@ namespace LinkCubeConvert
                 }
             }
 
-            // 4. 精确提取机场原生的【分地区】策略组
-            List<string> extractedRegionGroups = new List<string>();
-            string[] regionKeywords = {
-                "hk", "香港", "hongkong", "🇭🇰",
-                "sg", "狮城", "新加坡", "singapore", "🇸🇬",
-                "jp", "日本", "japan", "tokyo", "🇯🇵",
-                "us", "美国", "america", "usa", "🇺🇸",
-                "tw", "台湾", "taiwan", "taipei", "🇹🇼"
+            // ==========================================================
+            // 4. 精确提取机场原生的【分地区】策略组，并注入 Emoji
+            // ==========================================================
+            List<string> finalRegionGroupNames = new List<string>();
+            List<Outbound> regionOutbounds = new List<Outbound>();
+
+            // 特征字典：Emoji -> 对应的关键字匹配库
+            var regionMappings = new Dictionary<string, string[]>
+            {
+                { "🇭🇰", new[] { "hk", "香港", "hongkong", "🇭🇰" } },
+                { "🇸🇬", new[] { "sg", "狮城", "新加坡", "singapore", "🇸🇬" } },
+                { "🇯🇵", new[] { "jp", "日本", "japan", "tokyo", "🇯🇵" } },
+                { "🇺🇸", new[] { "us", "美国", "america", "usa", "🇺🇸" } },
+                { "🇹🇼", new[] { "tw", "台湾", "taiwan", "taipei", "🇹🇼" } }
             };
 
             if (clashConfig.ProxyGroups != null)
@@ -116,16 +151,35 @@ namespace LinkCubeConvert
                 foreach (var g in clashConfig.ProxyGroups)
                 {
                     string lowerName = g.Name.ToLower();
-                    if (regionKeywords.Any(kw => lowerName.Contains(kw)))
+                    string matchedEmoji = null;
+
+                    foreach (var kvp in regionMappings)
                     {
-                        extractedRegionGroups.Add(g.Name);
+                        if (kvp.Value.Any(kw => lowerName.Contains(kw)))
+                        {
+                            matchedEmoji = kvp.Key;
+                            break;
+                        }
+                    }
+
+                    if (matchedEmoji != null)
+                    {
+                        // 如果原组名不包含该 Emoji，则在前面强行拼接
+                        string formattedGroupName = g.Name;
+                        if (!formattedGroupName.Contains(matchedEmoji))
+                        {
+                            formattedGroupName = $"{matchedEmoji} {formattedGroupName}";
+                        }
+
+                        finalRegionGroupNames.Add(formattedGroupName);
+
                         string outType = g.Type == "select" ? "selector" : "urltest";
                         var mappedOutbounds = g.Proxies.Select(p => p == "REJECT" ? "BLOCK" : p).ToList();
 
-                        sbConfig.outbounds.Add(new Outbound
+                        regionOutbounds.Add(new Outbound
                         {
                             type = outType,
-                            tag = g.Name,
+                            tag = formattedGroupName, // 使用注入Emoji后的全新名称
                             outbounds = mappedOutbounds,
                             @default = outType == "selector" ? mappedOutbounds.FirstOrDefault() : null
                         });
@@ -133,27 +187,29 @@ namespace LinkCubeConvert
                 }
             }
 
-            // 5. 注入主代理组 & 定制业务组
+            // ==========================================================
+            // 5. 准备所有策略组数据 (控制界面呈现顺序)
+            // ==========================================================
             string mainProxyGroup = "🚀 PROXIES";
 
             List<string> mainGroupOptions = new List<string>();
-            mainGroupOptions.AddRange(extractedRegionGroups);
+            mainGroupOptions.AddRange(finalRegionGroupNames); // 使用带Emoji的名称列表
             mainGroupOptions.Add("DIRECT");
             mainGroupOptions.AddRange(allNodeNames);
 
-            sbConfig.outbounds.Add(new Outbound
+            var mainProxyOutbound = new Outbound
             {
                 type = "selector",
                 tag = mainProxyGroup,
                 outbounds = mainGroupOptions,
-                @default = extractedRegionGroups.FirstOrDefault() ?? allNodeNames.FirstOrDefault()
-            });
+                @default = finalRegionGroupNames.FirstOrDefault() ?? allNodeNames.FirstOrDefault()
+            };
 
             List<string> customGroupOptions = new List<string> { mainProxyGroup };
             customGroupOptions.AddRange(mainGroupOptions);
 
-            string usGroup = extractedRegionGroups.FirstOrDefault(n => n.Contains("US") || n.Contains("美") || n.Contains("🇺🇸")) ?? mainProxyGroup;
-            string sgGroup = extractedRegionGroups.FirstOrDefault(n => n.Contains("SG") || n.Contains("狮") || n.Contains("新") || n.Contains("🇸🇬")) ?? mainProxyGroup;
+            string usGroup = finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? mainProxyGroup;
+            string sgGroup = finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇸🇬")) ?? mainProxyGroup;
 
             var specialGroups = new Dictionary<string, string>
             {
@@ -166,38 +222,55 @@ namespace LinkCubeConvert
                 { "✈️ Telegram", sgGroup }
             };
 
+            List<Outbound> serviceOutbounds = new List<Outbound>();
             foreach (var group in specialGroups)
             {
-                sbConfig.outbounds.Add(new Outbound { type = "selector", tag = group.Key, outbounds = customGroupOptions, @default = group.Value });
+                serviceOutbounds.Add(new Outbound { type = "selector", tag = group.Key, outbounds = customGroupOptions, @default = group.Value });
             }
+
+            // ==========================================================
+            // [极其关键] 严格按照 UI 展示要求的顺序进行 Append
+            // 顺序：🚀 PROXIES -> 地区分组 -> 业务分组
+            // ==========================================================
+            sbConfig.outbounds.Add(mainProxyOutbound);         // 第 1 顺位
+            sbConfig.outbounds.AddRange(regionOutbounds);      // 第 2 顺位
+            sbConfig.outbounds.AddRange(serviceOutbounds);     // 第 3 顺位
 
             // 6. DNS 策略
             sbConfig.dns.strategy = "ipv4_only";
-            sbConfig.dns.servers.Add(new DnsServer { tag = "google", type = "tcp", server = "8.8.8.8", detour = mainProxyGroup });
-            sbConfig.dns.servers.Add(new DnsServer { tag = "local", type = "udp", server = "223.5.5.5", server_port = 53 });
-            sbConfig.dns.final = "google";
+            sbConfig.dns.independent_cache = true;
+
+            // 采用 TLS (DoT) 加密查询，通过主代理组发出
+            sbConfig.dns.servers.Add(new DnsServer { tag = "remote", type = "tls", server = "1.1.1.1", detour = mainProxyGroup });
+            // 使用 HTTPS 直连腾讯 DNS
+            sbConfig.dns.servers.Add(new DnsServer { tag = "local", type = "https", server = "1.12.12.12" });
+            // FakeIP 模块
+            sbConfig.dns.servers.Add(new DnsServer { tag = "fakeip", type = "fakeip", inet4_range = "198.18.0.0/15" });
+
+            sbConfig.dns.final = "remote";
 
             if (proxyServerDomains.Count > 0)
                 sbConfig.dns.rules.Add(new DnsRule { domain = proxyServerDomains.ToList(), server = "local" });
-            sbConfig.dns.rules.Add(new DnsRule { rule_set = new List<string> { "geosite-cn" }, server = "local" });
+
+            sbConfig.dns.rules.Add(new DnsRule { rule_set = new List<string> { "geosite-cn", "geosite-category-pt" }, server = "local" });
+            sbConfig.dns.rules.Add(new DnsRule { query_type = new List<string> { "A", "AAAA" }, server = "fakeip" });
 
             // 7. Route 路由策略
             sbConfig.route.default_domain_resolver = "local";
             sbConfig.route.final = mainProxyGroup;
 
-            // 7.1 定义所有的 SRS 远程规则集 (新增 PT、ADS 和 机场自定义直连规则)
             sbConfig.route.rule_set = new List<SingboxRuleSet>
             {
                 new SingboxRuleSet { tag = "geoip-private", type = "inline", rules = new List<HeadlessRule> { new HeadlessRule { ip_cidr = new List<string> { "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8" } } } },
-                
-                // 【新增 1】将提取出来的机场节点域名单独做成一个 inline 规则集
+
                 new SingboxRuleSet {
                     tag = "airport-domains",
                     type = "inline",
-                    rules = new List<HeadlessRule> { new HeadlessRule { domain = proxyServerDomains.Any() ? proxyServerDomains.ToList() : null } }
+                    rules = proxyServerDomains.Any()
+                            ? new List<HeadlessRule> { new HeadlessRule { domain = proxyServerDomains.ToList() } }
+                            : new List<HeadlessRule>()
                 },
 
-                // 【新增 2】引入去广告和 PT 数据库
                 CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "geosite-category-ads-all", mainProxyGroup),
                 CreateRemoteRuleSet("geosite-category-pt", "geosite", "geosite-category-pt", mainProxyGroup),
 
@@ -214,26 +287,19 @@ namespace LinkCubeConvert
                 CreateRemoteRuleSet("geoip-telegram", "geoip", "geoip-tg", mainProxyGroup),
             };
 
-            // 7.2 规则排序优先级 (极其重要，防封防漏网)
             sbConfig.route.rules = new List<RouteRule>
             {
-                // [L4/L7 拦截] 
                 new RouteRule { port = new List<int> { 53 }, action = "hijack-dns" },
                 new RouteRule { protocol = new List<string> { "dns" }, action = "hijack-dns" },
                 new RouteRule { port = new List<int> { 443 }, network = new List<string> { "udp" }, outbound = "BLOCK" },
-                new RouteRule { ip_cidr = new List<string> { "223.5.5.5/32" }, outbound = "DIRECT" },
-                
-                // [内网与机场自我保护]
+                new RouteRule { ip_cidr = new List<string> { "1.12.12.12/32", "1.1.1.1/32" }, outbound = "DIRECT" },
+
                 new RouteRule { rule_set = new List<string> { "geoip-private" }, outbound = "DIRECT" },
-                // 【核心补丁 1】：机场节点域名强制直连，防止套娃死循环或干扰握手
                 new RouteRule { rule_set = new List<string> { "airport-domains" }, outbound = "DIRECT" },
-                
-                // [防封杀与去广告]
-                // 【核心补丁 2】：屏蔽广告，并且严格保护 PT 流量不走代理！
+
                 new RouteRule { rule_set = new List<string> { "geosite-category-ads-all" }, outbound = "BLOCK" },
                 new RouteRule { rule_set = new List<string> { "geosite-category-pt" }, outbound = "DIRECT" },
-                
-                // [业务引流]
+
                 new RouteRule { rule_set = new List<string> { "geosite-youtube" }, outbound = "🎬 YouTube" },
                 new RouteRule { rule_set = new List<string> { "geosite-spotify" }, outbound = "🎵 Spotify" },
                 new RouteRule { rule_set = new List<string> { "geosite-steam" }, outbound = "🎮 Steam" },
@@ -241,8 +307,7 @@ namespace LinkCubeConvert
                 new RouteRule { rule_set = new List<string> { "geosite-openai" }, outbound = "🤖 OpenAI" },
                 new RouteRule { rule_set = new List<string> { "geosite-microsoft" }, outbound = "🪟 Microsoft" },
                 new RouteRule { rule_set = new List<string> { "geosite-telegram", "geoip-telegram" }, outbound = "✈️ Telegram" },
-                
-                // [国内直连]
+
                 new RouteRule { rule_set = new List<string> { "geosite-cn", "geoip-cn" }, outbound = "DIRECT" }
             };
 
@@ -250,7 +315,7 @@ namespace LinkCubeConvert
             File.WriteAllText(outputFile, JsonSerializer.Serialize(sbConfig, jsonOptions));
 
             Console.WriteLine($"[SUCCESS] Conversion complete! Saved to {outputFile}");
-            Console.WriteLine($"[INFO] Enhanced Safety: PT Sites and Airport node domains are strictly bypassed.");
+            Console.WriteLine($"[INFO] UI Array sorted: Main Proxy -> Emoji Regions -> Business Groups.");
         }
 
         static SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName, string downloadDetour)
