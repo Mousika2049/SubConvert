@@ -6,15 +6,17 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace LinkCubeConvert
 {
+    // ==================== 极简数据结构 ====================
     public class ClashConfig
     {
         [YamlMember(Alias = "mixed-port")] public int MixedPort { get; set; }
         [YamlMember(Alias = "proxies")] public List<Dictionary<string, object>> Proxies { get; set; }
         [YamlMember(Alias = "proxy-groups")] public List<ClashProxyGroup> ProxyGroups { get; set; }
-        [YamlMember(Alias = "rules")] public List<string> Rules { get; set; }
     }
     public class ClashProxyGroup { [YamlMember(Alias = "name")] public string Name { get; set; } [YamlMember(Alias = "type")] public string Type { get; set; } [YamlMember(Alias = "proxies")] public List<string> Proxies { get; set; } }
-    public class SingboxConfig { public LogConfig log { get; set; } = new LogConfig(); public DnsConfig dns { get; set; } = new DnsConfig(); public List<Inbound> inbounds { get; set; } = new List<Inbound>(); public List<Outbound> outbounds { get; set; } = new List<Outbound>(); public RouteConfig route { get; set; } = new RouteConfig(); }
+
+    public class SingboxConfig { public LogConfig log { get; set; } = new LogConfig(); public DnsConfig dns { get; set; } = new DnsConfig(); public List<Inbound> inbounds { get; set; } = new List<Inbound>(); public List<Outbound> outbounds { get; set; } = new List<Outbound>(); public RouteConfig route { get; set; } = new RouteConfig(); [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public ExperimentalConfig experimental { get; set; } }
+
     public class LogConfig { public string level { get; set; } = "info"; public bool timestamp { get; set; } = true; }
     public class DnsConfig { public List<DnsServer> servers { get; set; } = new List<DnsServer>(); public List<DnsRule> rules { get; set; } = new List<DnsRule>(); public string final { get; set; } public string strategy { get; set; } = "ipv4_only"; }
     public class DnsServer { public string tag { get; set; } public string type { get; set; } public string server { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? server_port { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string detour { get; set; } }
@@ -25,23 +27,15 @@ namespace LinkCubeConvert
     public class RouteConfig { [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<SingboxRuleSet> rule_set { get; set; } = new List<SingboxRuleSet>(); public List<RouteRule> rules { get; set; } = new List<RouteRule>(); [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string final { get; set; } public bool auto_detect_interface { get; set; } = true; public string default_domain_resolver { get; set; } }
     public class SingboxRuleSet { public string type { get; set; } public string tag { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string format { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string url { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string download_detour { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<HeadlessRule> rules { get; set; } }
     public class HeadlessRule { [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain_suffix { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain_keyword { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> ip_cidr { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> process_name { get; set; } }
+    public class RouteRule { [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> protocol { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<int> port { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> network { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string action { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> ip_cidr { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string outbound { get; set; } }
 
-    public class RouteRule
+    public class ExperimentalConfig
     {
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> protocol { get; set; }
-
-        // 【新增】：用于端口精准拦截
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<int> port { get; set; }
-        // 【新增】：用于指定网络协议 (tcp/udp)
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> network { get; set; }
-
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string action { get; set; }
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; }
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> ip_cidr { get; set; }
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string outbound { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public CacheFileConfig cache_file { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public ClashApiConfig clash_api { get; set; }
     }
-
-    public class RuleCollector { public List<string> Domain { get; set; } = new List<string>(); public List<string> DomainSuffix { get; set; } = new List<string>(); public List<string> DomainKeyword { get; set; } = new List<string>(); public List<string> IpCidr { get; set; } = new List<string>(); public List<string> ProcessName { get; set; } = new List<string>(); }
+    public class CacheFileConfig { public bool enabled { get; set; } public string path { get; set; } }
+    public class ClashApiConfig { public string external_controller { get; set; } public string external_ui { get; set; } public string secret { get; set; } }
 
     // ==================== 主程序 ====================
     class Program
@@ -65,28 +59,21 @@ namespace LinkCubeConvert
 
             var sbConfig = new SingboxConfig();
 
-            // 1. Inbounds
-            sbConfig.inbounds.Add(new Inbound
+            sbConfig.experimental = new ExperimentalConfig
             {
-                type = "tun",
-                tag = "tun-in",
-                interface_name = "tun0",
-                address = new List<string> { "172.19.0.1/30" },
-                auto_route = true,
-                strict_route = true,
-                stack = "system",
-                sniff = true,
-                mtu = 1500,
-                endpoint_independent_nat = true
-            });
+                cache_file = new CacheFileConfig { enabled = true, path = "cache.db" },
+                clash_api = new ClashApiConfig { external_controller = "127.0.0.1:9090", external_ui = "ui", secret = "" }
+            };
+
+            sbConfig.inbounds.Add(new Inbound { type = "tun", tag = "tun-in", interface_name = "tun0", address = new List<string> { "172.19.0.1/30" }, auto_route = true, strict_route = true, stack = "system", sniff = true, mtu = 1500, endpoint_independent_nat = true });
             sbConfig.inbounds.Add(new Inbound { type = "mixed", tag = "mixed-in", listen = "127.0.0.1", listen_port = clashConfig.MixedPort, sniff = true });
 
-            // 2. Outbounds
             sbConfig.outbounds.Add(new Outbound { type = "direct", tag = "DIRECT" });
             sbConfig.outbounds.Add(new Outbound { type = "block", tag = "BLOCK" });
 
+            // 3. 提取机场节点，并单独收集机场域名
             HashSet<string> proxyServerDomains = new HashSet<string>();
-            string mainProxyGroup = "Proxies";
+            List<string> allNodeNames = new List<string>();
 
             if (clashConfig.Proxies != null)
             {
@@ -94,12 +81,17 @@ namespace LinkCubeConvert
                 {
                     if (p.ContainsKey("type") && p["type"].ToString() == "trojan")
                     {
+                        string name = p["name"].ToString();
                         string server = p["server"].ToString();
+                        allNodeNames.Add(name);
+
+                        // 收集所有的节点域名 (如 linkcubecloud.net 相关)
                         if (!IsIpAddress(server)) proxyServerDomains.Add(server);
+
                         sbConfig.outbounds.Add(new Outbound
                         {
                             type = "trojan",
-                            tag = p["name"].ToString(),
+                            tag = name,
                             server = server,
                             server_port = int.Parse(p["port"].ToString()),
                             password = p["password"].ToString(),
@@ -109,157 +101,161 @@ namespace LinkCubeConvert
                 }
             }
 
+            // 4. 精确提取机场原生的【分地区】策略组
+            List<string> extractedRegionGroups = new List<string>();
+            string[] regionKeywords = {
+                "hk", "香港", "hongkong", "🇭🇰",
+                "sg", "狮城", "新加坡", "singapore", "🇸🇬",
+                "jp", "日本", "japan", "tokyo", "🇯🇵",
+                "us", "美国", "america", "usa", "🇺🇸",
+                "tw", "台湾", "taiwan", "taipei", "🇹🇼"
+            };
+
             if (clashConfig.ProxyGroups != null)
             {
                 foreach (var g in clashConfig.ProxyGroups)
                 {
-                    if (g.Type == "select")
+                    string lowerName = g.Name.ToLower();
+                    if (regionKeywords.Any(kw => lowerName.Contains(kw)))
                     {
-                        sbConfig.outbounds.Add(new Outbound { type = "selector", tag = g.Name, outbounds = g.Proxies, @default = g.Proxies.FirstOrDefault() });
-                        if ((g.Name == "Proxies" || g.Name == "Proxy") && mainProxyGroup == "Proxies") mainProxyGroup = g.Name;
+                        extractedRegionGroups.Add(g.Name);
+                        string outType = g.Type == "select" ? "selector" : "urltest";
+                        var mappedOutbounds = g.Proxies.Select(p => p == "REJECT" ? "BLOCK" : p).ToList();
+
+                        sbConfig.outbounds.Add(new Outbound
+                        {
+                            type = outType,
+                            tag = g.Name,
+                            outbounds = mappedOutbounds,
+                            @default = outType == "selector" ? mappedOutbounds.FirstOrDefault() : null
+                        });
                     }
                 }
             }
 
-            // 3. DNS
+            // 5. 注入主代理组 & 定制业务组
+            string mainProxyGroup = "🚀 PROXIES";
+
+            List<string> mainGroupOptions = new List<string>();
+            mainGroupOptions.AddRange(extractedRegionGroups);
+            mainGroupOptions.Add("DIRECT");
+            mainGroupOptions.AddRange(allNodeNames);
+
+            sbConfig.outbounds.Add(new Outbound
+            {
+                type = "selector",
+                tag = mainProxyGroup,
+                outbounds = mainGroupOptions,
+                @default = extractedRegionGroups.FirstOrDefault() ?? allNodeNames.FirstOrDefault()
+            });
+
+            List<string> customGroupOptions = new List<string> { mainProxyGroup };
+            customGroupOptions.AddRange(mainGroupOptions);
+
+            string usGroup = extractedRegionGroups.FirstOrDefault(n => n.Contains("US") || n.Contains("美") || n.Contains("🇺🇸")) ?? mainProxyGroup;
+            string sgGroup = extractedRegionGroups.FirstOrDefault(n => n.Contains("SG") || n.Contains("狮") || n.Contains("新") || n.Contains("🇸🇬")) ?? mainProxyGroup;
+
+            var specialGroups = new Dictionary<string, string>
+            {
+                { "🎬 YouTube", mainProxyGroup },
+                { "🎵 Spotify", mainProxyGroup },
+                { "🎮 Steam", mainProxyGroup },
+                { "🎮 Epic", mainProxyGroup },
+                { "🤖 OpenAI", usGroup },
+                { "🪟 Microsoft", mainProxyGroup },
+                { "✈️ Telegram", sgGroup }
+            };
+
+            foreach (var group in specialGroups)
+            {
+                sbConfig.outbounds.Add(new Outbound { type = "selector", tag = group.Key, outbounds = customGroupOptions, @default = group.Value });
+            }
+
+            // 6. DNS 策略
             sbConfig.dns.strategy = "ipv4_only";
             sbConfig.dns.servers.Add(new DnsServer { tag = "google", type = "tcp", server = "8.8.8.8", detour = mainProxyGroup });
             sbConfig.dns.servers.Add(new DnsServer { tag = "local", type = "udp", server = "223.5.5.5", server_port = 53 });
             sbConfig.dns.final = "google";
 
-            // 4. Route
+            if (proxyServerDomains.Count > 0)
+                sbConfig.dns.rules.Add(new DnsRule { domain = proxyServerDomains.ToList(), server = "local" });
+            sbConfig.dns.rules.Add(new DnsRule { rule_set = new List<string> { "geosite-cn" }, server = "local" });
+
+            // 7. Route 路由策略
             sbConfig.route.default_domain_resolver = "local";
             sbConfig.route.final = mainProxyGroup;
 
-            // ================= 关键拦截逻辑修复 =================
-
-            // 修复 1: 强制无脑拦截 53 端口，防止 UDP 嗅探延迟导致 DNS 泄漏到直连
-            sbConfig.route.rules.Add(new RouteRule { port = new List<int> { 53 }, action = "hijack-dns" });
-            sbConfig.route.rules.Add(new RouteRule { protocol = new List<string> { "dns" }, action = "hijack-dns" });
-
-            // 修复 2: 屏蔽推特/油管滥用的 QUIC 协议 (UDP 443)，逼迫其回退到稳定的 TCP 加载图片
-            sbConfig.route.rules.Add(new RouteRule
+            // 7.1 定义所有的 SRS 远程规则集 (新增 PT、ADS 和 机场自定义直连规则)
+            sbConfig.route.rule_set = new List<SingboxRuleSet>
             {
-                port = new List<int> { 443 },
-                network = new List<string> { "udp" },
-                outbound = "BLOCK"
-            });
-     
-
-            // 基础直连防止死循环
-            sbConfig.route.rules.Add(new RouteRule { ip_cidr = new List<string> { "223.5.5.5/32" }, outbound = "DIRECT" });
-            // ====================================================
-
-            var collectedRules = new Dictionary<string, RuleCollector>();
-            HashSet<string> remoteGeoIpTags = new HashSet<string>();
-
-            // 私有 IP 规则
-            string privateIpTag = "geoip-private";
-            sbConfig.route.rule_set.Add(new SingboxRuleSet
-            {
-                tag = privateIpTag,
-                type = "inline",
-                rules = new List<HeadlessRule>
-                {
-                    new HeadlessRule { ip_cidr = new List<string> { "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8" } }
-                }
-            });
-            sbConfig.route.rules.Add(new RouteRule { rule_set = new List<string> { privateIpTag }, outbound = "DIRECT" });
-
-            if (clashConfig.Rules != null)
-            {
-                foreach (var line in clashConfig.Rules)
-                {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-                    var parts = line.Split(',');
-                    if (parts.Length < 2) continue;
-
-                    string type = parts[0].Trim().ToUpper();
-                    if (type == "MATCH") continue;
-
-                    if (parts.Length < 3) continue;
-                    string value = parts[1].Trim();
-                    string target = parts[2].Trim();
-
-                    if (!collectedRules.ContainsKey(target)) collectedRules[target] = new RuleCollector();
-
-                    if (type == "GEOIP")
-                    {
-                        string countryCode = value.ToLower();
-                        string ruleSetTag = $"geoip-{countryCode}";
-                        if (!remoteGeoIpTags.Contains(ruleSetTag))
-                        {
-                            sbConfig.route.rule_set.Add(new SingboxRuleSet
-                            {
-                                tag = ruleSetTag,
-                                type = "remote",
-                                format = "binary",
-                                url = $"https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-{countryCode}.srs",
-                                download_detour = mainProxyGroup
-                            });
-                            remoteGeoIpTags.Add(ruleSetTag);
-                        }
-                        sbConfig.route.rules.Add(new RouteRule { rule_set = new List<string> { ruleSetTag }, outbound = target });
-                        continue;
-                    }
-
-                    switch (type)
-                    {
-                        case "DOMAIN": collectedRules[target].Domain.Add(value); break;
-                        case "DOMAIN-SUFFIX": collectedRules[target].DomainSuffix.Add(value); break;
-                        case "DOMAIN-KEYWORD": collectedRules[target].DomainKeyword.Add(value); break;
-                        case "IP-CIDR": case "IP-CIDR6": collectedRules[target].IpCidr.Add(value); break;
-                        case "PROCESS-NAME": collectedRules[target].ProcessName.Add(value); break;
-                    }
-                }
-            }
-
-            foreach (var kvp in collectedRules)
-            {
-                string target = kvp.Key;
-                RuleCollector collector = kvp.Value;
-                collector.DomainSuffix = collector.DomainSuffix.Distinct().ToList();
-
-                if (collector.Domain.Count == 0 && collector.DomainSuffix.Count == 0 &&
-                    collector.DomainKeyword.Count == 0 && collector.IpCidr.Count == 0 &&
-                    collector.ProcessName.Count == 0) continue;
-
-                string cleanTarget = target.Replace(" ", "-").Replace(":", "");
-                string ruleSetTag = $"rs-local-{cleanTarget}";
-
-                var localRuleSet = new SingboxRuleSet
-                {
+                new SingboxRuleSet { tag = "geoip-private", type = "inline", rules = new List<HeadlessRule> { new HeadlessRule { ip_cidr = new List<string> { "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8" } } } },
+                
+                // 【新增 1】将提取出来的机场节点域名单独做成一个 inline 规则集
+                new SingboxRuleSet {
+                    tag = "airport-domains",
                     type = "inline",
-                    tag = ruleSetTag,
-                    rules = new List<HeadlessRule>
-                    {
-                        new HeadlessRule
-                        {
-                            domain = collector.Domain.Any() ? collector.Domain : null,
-                            domain_suffix = collector.DomainSuffix.Any() ? collector.DomainSuffix : null,
-                            domain_keyword = collector.DomainKeyword.Any() ? collector.DomainKeyword : null,
-                            ip_cidr = collector.IpCidr.Any() ? collector.IpCidr : null,
-                            process_name = collector.ProcessName.Any() ? collector.ProcessName : null
-                        }
-                    }
-                };
-                sbConfig.route.rule_set.Add(localRuleSet);
-                sbConfig.route.rules.Add(new RouteRule { rule_set = new List<string> { ruleSetTag }, outbound = target });
-            }
+                    rules = new List<HeadlessRule> { new HeadlessRule { domain = proxyServerDomains.Any() ? proxyServerDomains.ToList() : null } }
+                },
 
-            // 5. DNS Rules
-            if (proxyServerDomains.Count > 0)
-                sbConfig.dns.rules.Add(new DnsRule { domain = proxyServerDomains.ToList(), server = "local" });
+                // 【新增 2】引入去广告和 PT 数据库
+                CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "geosite-category-ads-all", mainProxyGroup),
+                CreateRemoteRuleSet("geosite-category-pt", "geosite", "geosite-category-pt", mainProxyGroup),
 
-            string directTag = $"rs-local-DIRECT";
-            if (sbConfig.route.rule_set.Any(r => r.tag == directTag))
-                sbConfig.dns.rules.Add(new DnsRule { rule_set = new List<string> { directTag }, server = "local" });
+                CreateRemoteRuleSet("geosite-cn", "geosite", "geosite-cn", mainProxyGroup),
+                CreateRemoteRuleSet("geoip-cn", "geoip", "geoip-cn", mainProxyGroup),
+
+                CreateRemoteRuleSet("geosite-youtube", "geosite", "geosite-youtube", mainProxyGroup),
+                CreateRemoteRuleSet("geosite-spotify", "geosite", "geosite-spotify", mainProxyGroup),
+                CreateRemoteRuleSet("geosite-steam", "geosite", "geosite-steam", mainProxyGroup),
+                CreateRemoteRuleSet("geosite-epicgames", "geosite", "geosite-epicgames", mainProxyGroup),
+                CreateRemoteRuleSet("geosite-openai", "geosite", "geosite-openai", mainProxyGroup),
+                CreateRemoteRuleSet("geosite-microsoft", "geosite", "geosite-microsoft", mainProxyGroup),
+                CreateRemoteRuleSet("geosite-telegram", "geosite", "geosite-telegram", mainProxyGroup),
+                CreateRemoteRuleSet("geoip-telegram", "geoip", "geoip-tg", mainProxyGroup),
+            };
+
+            // 7.2 规则排序优先级 (极其重要，防封防漏网)
+            sbConfig.route.rules = new List<RouteRule>
+            {
+                // [L4/L7 拦截] 
+                new RouteRule { port = new List<int> { 53 }, action = "hijack-dns" },
+                new RouteRule { protocol = new List<string> { "dns" }, action = "hijack-dns" },
+                new RouteRule { port = new List<int> { 443 }, network = new List<string> { "udp" }, outbound = "BLOCK" },
+                new RouteRule { ip_cidr = new List<string> { "223.5.5.5/32" }, outbound = "DIRECT" },
+                
+                // [内网与机场自我保护]
+                new RouteRule { rule_set = new List<string> { "geoip-private" }, outbound = "DIRECT" },
+                // 【核心补丁 1】：机场节点域名强制直连，防止套娃死循环或干扰握手
+                new RouteRule { rule_set = new List<string> { "airport-domains" }, outbound = "DIRECT" },
+                
+                // [防封杀与去广告]
+                // 【核心补丁 2】：屏蔽广告，并且严格保护 PT 流量不走代理！
+                new RouteRule { rule_set = new List<string> { "geosite-category-ads-all" }, outbound = "BLOCK" },
+                new RouteRule { rule_set = new List<string> { "geosite-category-pt" }, outbound = "DIRECT" },
+                
+                // [业务引流]
+                new RouteRule { rule_set = new List<string> { "geosite-youtube" }, outbound = "🎬 YouTube" },
+                new RouteRule { rule_set = new List<string> { "geosite-spotify" }, outbound = "🎵 Spotify" },
+                new RouteRule { rule_set = new List<string> { "geosite-steam" }, outbound = "🎮 Steam" },
+                new RouteRule { rule_set = new List<string> { "geosite-epicgames" }, outbound = "🎮 Epic" },
+                new RouteRule { rule_set = new List<string> { "geosite-openai" }, outbound = "🤖 OpenAI" },
+                new RouteRule { rule_set = new List<string> { "geosite-microsoft" }, outbound = "🪟 Microsoft" },
+                new RouteRule { rule_set = new List<string> { "geosite-telegram", "geoip-telegram" }, outbound = "✈️ Telegram" },
+                
+                // [国内直连]
+                new RouteRule { rule_set = new List<string> { "geosite-cn", "geoip-cn" }, outbound = "DIRECT" }
+            };
 
             var jsonOptions = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
             File.WriteAllText(outputFile, JsonSerializer.Serialize(sbConfig, jsonOptions));
 
-            Console.WriteLine($"Conversion complete! Saved to {outputFile}");
-            Console.WriteLine($"Patches applied: Strict port 53 DNS Hijack & UDP 443 (QUIC) rejection.");
+            Console.WriteLine($"[SUCCESS] Conversion complete! Saved to {outputFile}");
+            Console.WriteLine($"[INFO] Enhanced Safety: PT Sites and Airport node domains are strictly bypassed.");
+        }
+
+        static SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName, string downloadDetour)
+        {
+            return new SingboxRuleSet { tag = tag, type = "remote", format = "binary", url = $"https://raw.githubusercontent.com/SagerNet/sing-{repoType}/rule-set/{fileName}.srs", download_detour = downloadDetour };
         }
 
         static bool IsIpAddress(string host) => System.Net.IPAddress.TryParse(host, out _);
