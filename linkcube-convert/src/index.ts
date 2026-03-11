@@ -35,7 +35,7 @@ export default {
         throw new Error("YAML 解析为空");
       }
 
-      // 2. 初始化极简 Singbox 框架
+      // 2. 初始化极简 Singbox 框架 (加入 Experimental 实验性功能)
       const sbConfig: any = {
         log: { level: "info", timestamp: true },
         dns: { servers: [], rules: [], final: "remote", strategy: "ipv4_only", independent_cache: true },
@@ -44,14 +44,17 @@ export default {
         route: { rule_set: [], rules: [], final: "🚀 PROXIES", auto_detect_interface: true, default_domain_resolver: "local" },
         experimental: {
           cache_file: { enabled: true, path: "cache.db" },
-          clash_api: { external_controller: "127.0.0.1:9090", external_ui: "ui", secret: "" }
+          clash_api: { external_controller: "127.0.0.1:9090", external_ui: "ui", secret: "314159" }
         }
       };
 
       // ========== Inbounds (入站) ==========
+      // 【调整】：给 TUN 加入 IPv6 地址以捕获流量
       sbConfig.inbounds.push({
-        type: "tun", tag: "tun-in", interface_name: "tun0", address: ["172.19.0.1/30"],
-        auto_route: true, strict_route: true, stack: "system", sniff: true, mtu: 1500, endpoint_independent_nat: true
+        type: "tun", tag: "tun-in", interface_name: "tun0", 
+        address: ["172.19.0.1/30", "fd00::1/126"],
+        auto_route: true, strict_route: true, stack: "system", 
+        sniff: true, endpoint_independent_nat: true
       });
       
       if (clashConfig['mixed-port']) {
@@ -160,7 +163,8 @@ export default {
         { name: "🎮 Epic", default: mainProxyGroup },
         { name: "🤖 OpenAI", default: usGroup },
         { name: "🪟 Microsoft", default: mainProxyGroup },
-        { name: "✈️ Telegram", default: sgGroup }
+        { name: "✈️ Telegram", default: sgGroup },
+        { name: "📚 Wikipedia", default: mainProxyGroup } // 新增 Wikipedia
       ];
 
       const serviceOutbounds: any[] = [];
@@ -170,32 +174,26 @@ export default {
         });
       }
 
-      // [极其关键] 严格按照 UI 展示要求的顺序进行 Append
-      sbConfig.outbounds.push(mainProxyOutbound);         // 1. 🚀 PROXIES
-      for (const ro of regionOutbounds) sbConfig.outbounds.push(ro);  // 2. 地区分组
-      for (const so of serviceOutbounds) sbConfig.outbounds.push(so); // 3. 业务分组
+      // [严格追加顺序]
+      sbConfig.outbounds.push(mainProxyOutbound);
+      for (const ro of regionOutbounds) sbConfig.outbounds.push(ro);
+      for (const so of serviceOutbounds) sbConfig.outbounds.push(so);
 
-      // ========== DNS 策略 (FakeIP 支持) ==========
+      // ========== DNS 策略 ==========
       sbConfig.dns.servers.push({ tag: "remote", type: "tls", server: "1.1.1.1", detour: mainProxyGroup });
       sbConfig.dns.servers.push({ tag: "local", type: "https", server: "1.12.12.12" });
-      sbConfig.dns.servers.push({ tag: "fakeip", type: "fakeip", inet4_range: "198.18.0.0/15" });
 
       if (proxyServerDomains.size > 0) {
         sbConfig.dns.rules.push({ domain: Array.from(proxyServerDomains), server: "local" });
       }
       sbConfig.dns.rules.push({ rule_set: ["geosite-cn", "geosite-category-pt"], server: "local" });
-      sbConfig.dns.rules.push({ query_type: ["A", "AAAA"], server: "fakeip" });
 
       // ========== Route 路由及规则集配置 ==========
-      const airportDomainsRules = proxyServerDomains.size > 0 
-        ? [{ domain: Array.from(proxyServerDomains) }] 
-        : []; // 为空则在规则集中隐身
-
       sbConfig.route.rule_set.push({
         tag: "geoip-private", type: "inline", rules: [{ ip_cidr: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8"] }]
       });
       
-      // 如果 airportDomainsRules 为空，这里加进去也没有 rule 内容，符合要求
+      const airportDomainsRules = proxyServerDomains.size > 0 ? [{ domain: Array.from(proxyServerDomains) }] : [];
       sbConfig.route.rule_set.push({
         tag: "airport-domains", type: "inline", rules: airportDomainsRules
       });
@@ -204,7 +202,6 @@ export default {
       sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-category-pt", "geosite", "geosite-category-pt", mainProxyGroup));
       sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-cn", "geosite", "geosite-cn", mainProxyGroup));
       sbConfig.route.rule_set.push(createRemoteRuleSet("geoip-cn", "geoip", "geoip-cn", mainProxyGroup));
-      
       sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-youtube", "geosite", "geosite-youtube", mainProxyGroup));
       sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-spotify", "geosite", "geosite-spotify", mainProxyGroup));
       sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-steam", "geosite", "geosite-steam", mainProxyGroup));
@@ -213,10 +210,16 @@ export default {
       sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-microsoft", "geosite", "geosite-microsoft", mainProxyGroup));
       sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-telegram", "geosite", "geosite-telegram", mainProxyGroup));
       sbConfig.route.rule_set.push(createRemoteRuleSet("geoip-telegram", "geoip", "geoip-tg", mainProxyGroup));
+      sbConfig.route.rule_set.push(createRemoteRuleSet("geosite-wikimedia", "geosite", "geosite-wikimedia", mainProxyGroup)); // 新增 Wikipedia 规则集
 
+      // ========== Route Rules ==========
       sbConfig.route.rules.push({ port: [53], action: "hijack-dns" });
       sbConfig.route.rules.push({ protocol: ["dns"], action: "hijack-dns" });
-      sbConfig.route.rules.push({ port: [443], network: ["udp"], outbound: "BLOCK" }); // 杀掉 QUIC 迫使 YouTube 回退 TCP
+      
+      // 【核心调整】：IPv6 物理拔管。彻底斩断任何 IPv6 直连漏网的可能
+      sbConfig.route.rules.push({ ip_cidr: ["::/0"], outbound: "BLOCK" });
+
+      sbConfig.route.rules.push({ port: [443], network: ["udp"], outbound: "BLOCK" });
       sbConfig.route.rules.push({ ip_cidr: ["1.12.12.12/32", "1.1.1.1/32"], outbound: "DIRECT" });
       
       sbConfig.route.rules.push({ rule_set: ["geoip-private"], outbound: "DIRECT" });
@@ -232,14 +235,15 @@ export default {
       sbConfig.route.rules.push({ rule_set: ["geosite-openai"], outbound: "🤖 OpenAI" });
       sbConfig.route.rules.push({ rule_set: ["geosite-microsoft"], outbound: "🪟 Microsoft" });
       sbConfig.route.rules.push({ rule_set: ["geosite-telegram", "geoip-telegram"], outbound: "✈️ Telegram" });
+      sbConfig.route.rules.push({ rule_set: ["geosite-wikimedia"], outbound: "📚 Wikipedia" }); // 新增 Wikipedia 路由分发
 
       sbConfig.route.rules.push({ rule_set: ["geosite-cn", "geoip-cn"], outbound: "DIRECT" });
 
-      // 返回结果并忽略 undefined 属性 (完美复刻 [JsonIgnore])
+      // ========== 返回响应 ==========
       return new Response(JSON.stringify(sbConfig, null, 2), {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Access-Control-Allow-Origin": "*"
+          "Access-Control-Allow-Origin": "*" // 保持 CORS，让你的网页端依然可用
         }
       });
 
