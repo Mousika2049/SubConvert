@@ -1,4 +1,8 @@
-﻿using System.Text.Encodings.Web;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using YamlDotNet.Serialization;
@@ -51,8 +55,7 @@ namespace LinkCubeConvert
 
             sbConfig.experimental = new ExperimentalConfig { cache_file = new CacheFileConfig { enabled = true, path = "cache.db" }, clash_api = new ClashApiConfig { external_controller = "127.0.0.1:9090", external_ui = "ui", secret = "314159" } };
 
-            // 【调整】：给 TUN 加入 IPv6 地址以捕获流量
-            sbConfig.inbounds.Add(new Inbound { type = "tun", tag = "tun-in", interface_name = "tun0", address = new List<string> { "172.19.0.1/30", "fd00::1/126" }, auto_route = true, strict_route = true, stack = "system", sniff = true, endpoint_independent_nat = true });
+            sbConfig.inbounds.Add(new Inbound { type = "tun", tag = "tun-in", interface_name = "tun0", address = new List<string> { "172.19.0.1/30", "fd00::1/126" }, auto_route = true, strict_route = false, stack = "system", sniff = true, endpoint_independent_nat = true });
             sbConfig.inbounds.Add(new Inbound { type = "mixed", tag = "mixed-in", listen = "127.0.0.1", listen_port = clashConfig.MixedPort, sniff = true });
 
             sbConfig.outbounds.Add(new Outbound { type = "direct", tag = "DIRECT" });
@@ -150,12 +153,16 @@ namespace LinkCubeConvert
             sbConfig.dns.strategy = "ipv4_only";
             sbConfig.dns.independent_cache = true;
 
+            // 【核心修复】：将 type 改为 local。Sing-box 规定调用系统底层的 DNS 必须填 local。
+            sbConfig.dns.servers.Add(new DnsServer { tag = "system", type = "local" });
             sbConfig.dns.servers.Add(new DnsServer { tag = "remote", type = "tls", server = "1.1.1.1", detour = mainProxyGroup });
             sbConfig.dns.servers.Add(new DnsServer { tag = "local", type = "https", server = "1.12.12.12" });
 
             sbConfig.dns.final = "remote";
 
             if (proxyServerDomains.Count > 0) sbConfig.dns.rules.Add(new DnsRule { domain = proxyServerDomains.ToList(), server = "local" });
+
+            sbConfig.dns.rules.Add(new DnsRule { rule_set = new List<string> { "captive-portal" }, server = "system", disable_cache = true });
 
             sbConfig.dns.rules.Add(new DnsRule { rule_set = new List<string> { "geosite-cn", "geosite-category-pt" }, server = "local" });
 
@@ -167,6 +174,16 @@ namespace LinkCubeConvert
                 new SingboxRuleSet { tag = "geoip-private", type = "inline", rules = new List<HeadlessRule> { new HeadlessRule { ip_cidr = new List<string> { "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8" } } } },
 
                 new SingboxRuleSet { tag = "airport-domains", type = "inline", rules = proxyServerDomains.Any() ? new List<HeadlessRule> { new HeadlessRule { domain = proxyServerDomains.ToList() } } : new List<HeadlessRule>() },
+
+                new SingboxRuleSet {
+                    tag = "captive-portal",
+                    type = "inline",
+                    rules = new List<HeadlessRule> { new HeadlessRule { domain_suffix = new List<string> {
+                        "msftconnecttest.com", "msftncsi.com",
+                        "captive.apple.com",
+                        "connectivitycheck.gstatic.com"
+                    } } }
+                },
 
                 CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "geosite-category-ads-all", mainProxyGroup),
                 CreateRemoteRuleSet("geosite-category-pt", "geosite", "geosite-category-pt", mainProxyGroup),
@@ -187,8 +204,7 @@ namespace LinkCubeConvert
             {
                 new RouteRule { port = new List<int> { 53 }, action = "hijack-dns" },
                 new RouteRule { protocol = new List<string> { "dns" }, action = "hijack-dns" },
-                
-                // 【核心调整】：IPv6 物理拔管。彻底斩断任何 IPv6 直连漏网的可能
+
                 new RouteRule { ip_cidr = new List<string> { "::/0" }, outbound = "BLOCK" },
 
                 new RouteRule { port = new List<int> { 443 }, network = new List<string> { "udp" }, outbound = "BLOCK" },
@@ -196,6 +212,8 @@ namespace LinkCubeConvert
 
                 new RouteRule { rule_set = new List<string> { "geoip-private" }, outbound = "DIRECT" },
                 new RouteRule { rule_set = new List<string> { "airport-domains" }, outbound = "DIRECT" },
+
+                new RouteRule { rule_set = new List<string> { "captive-portal" }, outbound = "DIRECT" },
 
                 new RouteRule { rule_set = new List<string> { "geosite-category-ads-all" }, outbound = "BLOCK" },
                 new RouteRule { rule_set = new List<string> { "geosite-category-pt" }, outbound = "DIRECT" },
@@ -215,7 +233,7 @@ namespace LinkCubeConvert
             var jsonOptions = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
             File.WriteAllText(outputFile, JsonSerializer.Serialize(sbConfig, jsonOptions));
             Console.WriteLine($"[SUCCESS] Saved to {outputFile}");
-            Console.WriteLine($"[INFO] Applied IPv6 Physical Unplug Block Rule.");
+            Console.WriteLine($"[INFO] Added Captive Portal detection bypass for Wi-Fi authentication.");
         }
 
         static SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName, string downloadDetour)
