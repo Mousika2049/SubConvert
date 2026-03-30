@@ -40,9 +40,10 @@ namespace LinkCubeConvert
         public List<DnsServer> servers { get; set; } = new List<DnsServer>();
         public List<DnsRule> rules { get; set; } = new List<DnsRule>();
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string final { get; set; }
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string strategy { get; set; } = "ipv4_only";
+        public string strategy { get; set; } = "ipv4_only";
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? independent_cache { get; set; }
     }
+
     public class DnsServer
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string tag { get; set; }
@@ -50,16 +51,20 @@ namespace LinkCubeConvert
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? server_port { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string detour { get; set; }
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string inet4_range { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string domain_resolver { get; set; }
     }
+
     public class DnsRule
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain { get; set; }
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> outbound { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain_suffix { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> query_type { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? disable_cache { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string action { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string rcode { get; set; }
     }
 
     public class Inbound
@@ -77,17 +82,6 @@ namespace LinkCubeConvert
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? endpoint_independent_nat { get; set; }
     }
 
-    /*// 【新增】：多路复用并发控制数据结构
-    public class OutboundMultiplex
-    {
-        public bool enabled { get; set; } = true;
-        public string protocol { get; set; } = "h2mux"; // 使用更先进的 h2mux
-        public int max_connections { get; set; } = 4;   // 核心！最多开 4 条车道防队头阻塞
-        public int min_streams { get; set; } = 4;       // 每条车道至少跑 4 个请求才开新车道
-        // 【核心新增】：开启随机垃圾数据填充，彻底粉碎 GFW 封包大小特征！
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? padding { get; set; }
-    }
-    */
     public class Outbound
     {
         public string type { get; set; }
@@ -99,19 +93,20 @@ namespace LinkCubeConvert
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string @default { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OutboundTls tls { get; set; }
 
-        public string tcp_keep_alive { get; set; }
-        public string tcp_keep_alive_interval { get; set; }
-        public bool? tcp_fast_open { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string domain_resolver { get; set; }
 
-        //[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OutboundMultiplex multiplex { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string tcp_keep_alive { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string tcp_keep_alive_interval { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? tcp_fast_open { get; set; }
 
-        // 【核心新增】：拨号超时控制，拒绝死等
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string connect_timeout { get; set; }
 
-        // 【核心新增】：UrlTest 自动切换测速三件套
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string url { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string interval { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? tolerance { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string idle_timeout { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? interrupt_exist_connections { get; set; }
     }
 
     public class Utls
@@ -123,10 +118,11 @@ namespace LinkCubeConvert
     public class OutboundTls
     {
         public bool enabled { get; set; } = true;
-        public string server_name { get; set; }
-        public bool insecure { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server_name { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? insecure { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Utls utls { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> alpn { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string min_version { get; set; }
     }
 
     public class RouteConfig
@@ -135,7 +131,6 @@ namespace LinkCubeConvert
         public List<RouteRule> rules { get; set; } = new List<RouteRule>();
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string final { get; set; }
         public bool auto_detect_interface { get; set; } = true;
-        public string default_domain_resolver { get; set; }
     }
     public class SingboxRuleSet
     {
@@ -145,6 +140,7 @@ namespace LinkCubeConvert
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string url { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string download_detour { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<HeadlessRule> rules { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string update_interval { get; set; }
     }
     public class HeadlessRule
     {
@@ -154,8 +150,11 @@ namespace LinkCubeConvert
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> ip_cidr { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> process_name { get; set; }
     }
+
     public class RouteRule
     {
+        // 指定入口限制，防止网关级误杀
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> inbound { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> protocol { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<int> port { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> network { get; set; }
@@ -163,14 +162,8 @@ namespace LinkCubeConvert
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> ip_cidr { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string outbound { get; set; }
-
-        // 【核心新增】：匹配 1.13.x 全新 sniff 动作的超时控制字段
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string timeout { get; set; }
-
-        // 【核心新增】：解析动作的寻址策略字段
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string strategy { get; set; }
     }
-
 
     public class ExperimentalConfig
     {
@@ -181,6 +174,8 @@ namespace LinkCubeConvert
     {
         public bool enabled { get; set; }
         public string path { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? store_rdrc { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string rdrc_timeout { get; set; }
     }
     public class ClashApiConfig
     {
@@ -205,25 +200,50 @@ namespace LinkCubeConvert
 
             var sbConfig = new SingboxConfig();
 
-            sbConfig.experimental = new ExperimentalConfig { cache_file = new CacheFileConfig { enabled = true, path = "cache.db" }, clash_api = new ClashApiConfig { external_controller = "127.0.0.1:9999", external_ui = "ui", secret = "314159" } };
+            sbConfig.experimental = new ExperimentalConfig
+            {
+                cache_file = new CacheFileConfig
+                {
+                    enabled = true,
+                    path = "cache.db",
+                    store_rdrc = true,
+                    rdrc_timeout = "7d"
+                },
+                clash_api = new ClashApiConfig
+                {
+                    external_controller = "127.0.0.1:9999",
+                    external_ui = "ui",
+                    secret = ""
+                }
+            };
 
-            // 【完全净化的 Inbound】：拔除所有废弃的 sniff 字段，仅保留 MTU 和内核必要的物理参数
+            sbConfig.inbounds.Add(new Inbound
+            {
+                type = "tun",
+                tag = "tun-in",
+                interface_name = "tun0",
+                address = new List<string> { "172.19.0.1/30", "fd00::1/126" },
+                auto_route = true,
+                strict_route = true,
+                stack = "system",
+                endpoint_independent_nat = true,
+                mtu = 1350
+            });
             sbConfig.inbounds.Add(new Inbound 
             { 
-                type = "tun", 
-                tag = "tun-in", 
-                interface_name = "tun0", 
-                address = new List<string> { "172.19.0.1/30", "fd00::1/126" }, 
-                auto_route = true, 
-                strict_route = true, 
-                stack = "system", 
-                endpoint_independent_nat = true, 
-                mtu = 1350 
+                type = "mixed", 
+                tag = "mixed-in", 
+                listen = "127.0.0.1", 
+                listen_port = clashConfig.MixedPort 
             });
-            sbConfig.inbounds.Add(new Inbound { type = "mixed", tag = "mixed-in", listen = "127.0.0.1", listen_port = clashConfig.MixedPort });
 
-            sbConfig.outbounds.Add(new Outbound { type = "direct", tag = "DIRECT" });
-            sbConfig.outbounds.Add(new Outbound { type = "block", tag = "BLOCK" });
+            // DIRECT 出站由最安全的 OS 底层 (bootstrap) 托底解析
+            sbConfig.outbounds.Add(new Outbound 
+            { 
+                type = "direct", 
+                tag = "DIRECT", 
+                domain_resolver = "bootstrap" 
+            });
 
             HashSet<string> proxyServerDomains = new HashSet<string>();
             List<string> allNodeNames = new List<string>();
@@ -248,23 +268,22 @@ namespace LinkCubeConvert
                             server_port = int.Parse(p["port"].ToString()),
                             password = p["password"].ToString(),
 
+                            // 代理节点域名坚决使用 local (223.5.5.5) 解析，防 ISP 污染！
+                            domain_resolver = "local",
+
                             tcp_keep_alive = "15s",
                             tcp_keep_alive_interval = "15s",
                             tcp_fast_open = true,
-
-                            // 5秒连不上直接掐断
                             connect_timeout = "5s",
-
-                            // 开启并发多路复用！既干掉 90% 的握手延迟，又通过 4 并发避开 5G 丢包时的队头阻塞
-                            //multiplex = new OutboundMultiplex { enabled = true, protocol = "h2mux", max_connections = 4, min_streams = 4, padding = true },
 
                             tls = new OutboundTls
                             {
                                 enabled = true,
                                 server_name = p.ContainsKey("sni") ? p["sni"].ToString() : server,
-                                insecure = p.ContainsKey("skip-cert-verify") && bool.Parse(p["skip-cert-verify"].ToString()),
+                                insecure = (p.ContainsKey("skip-cert-verify") && bool.Parse(p["skip-cert-verify"].ToString())) ? true : (bool?)null,
                                 utls = new Utls { enabled = true, fingerprint = "chrome" },
-                                alpn = new List<string> { "h2", "http/1.1" }
+                                alpn = new List<string> { "h2", "http/1.1" },
+                                min_version = "1.3"
                             }
                         });
                     }
@@ -290,7 +309,13 @@ namespace LinkCubeConvert
                     string lowerName = g.Name.ToLower();
                     string matchedEmoji = null;
 
-                    foreach (var kvp in regionMappings) { if (kvp.Value.Any(kw => lowerName.Contains(kw))) { matchedEmoji = kvp.Key; break; } }
+                    foreach (var kvp in regionMappings) 
+                    { 
+                        if (kvp.Value.Any(kw => lowerName.Contains(kw))) 
+                        { 
+                            matchedEmoji = kvp.Key; break; 
+                        } 
+                    }
 
                     if (matchedEmoji != null)
                     {
@@ -300,9 +325,8 @@ namespace LinkCubeConvert
                         finalRegionGroupNames.Add(formattedGroupName);
 
                         string outType = g.Type == "select" ? "selector" : "urltest";
-                        var mappedOutbounds = g.Proxies.Select(p => p == "REJECT" ? "BLOCK" : p).ToList();
+                        var mappedOutbounds = g.Proxies.Where(p => p != "REJECT").ToList();
 
-                        // 【完美修复】：只有当类型是 urltest 时，才注入测速参数，唤醒后台容灾探针！
                         regionOutbounds.Add(new Outbound
                         {
                             type = outType,
@@ -311,7 +335,9 @@ namespace LinkCubeConvert
                             @default = outType == "selector" ? mappedOutbounds.FirstOrDefault() : null,
                             url = outType == "urltest" ? "https://www.gstatic.com/generate_204" : null,
                             interval = outType == "urltest" ? "3m" : null,
-                            tolerance = outType == "urltest" ? 50 : null
+                            tolerance = outType == "urltest" ? 50 : null,
+                            idle_timeout = outType == "urltest" ? "30m" : null,
+                            interrupt_exist_connections = true
                         });
                     }
                 }
@@ -323,7 +349,28 @@ namespace LinkCubeConvert
             mainGroupOptions.Add("DIRECT");
             mainGroupOptions.AddRange(allNodeNames);
 
-            var mainProxyOutbound = new Outbound { type = "selector", tag = mainProxyGroup, outbounds = mainGroupOptions, @default = finalRegionGroupNames.FirstOrDefault() ?? allNodeNames.FirstOrDefault() };
+            var mainProxyOutbound = new Outbound
+            {
+                type = "selector",
+                tag = mainProxyGroup,
+                outbounds = mainGroupOptions,
+                @default = finalRegionGroupNames.FirstOrDefault() ?? allNodeNames.FirstOrDefault(),
+                interrupt_exist_connections = true
+            };
+
+            string ruleUpdateGroup = "☁️ RULE-UPDATE";
+            var ruleUpdateOutbound = new Outbound
+            {
+                type = "urltest",
+                tag = ruleUpdateGroup,
+                outbounds = allNodeNames,
+                url = "https://www.gstatic.com/generate_204",
+                interval = "3m",
+                tolerance = 50,
+                interrupt_exist_connections = true
+            };
+
+            sbConfig.outbounds.Add(ruleUpdateOutbound);
 
             List<string> customGroupOptions = new List<string> { mainProxyGroup };
             customGroupOptions.AddRange(mainGroupOptions);
@@ -333,11 +380,28 @@ namespace LinkCubeConvert
 
             var specialGroups = new Dictionary<string, string>
             {
-                { "🎬 YouTube", mainProxyGroup }, { "🎵 Spotify", mainProxyGroup }, { "🎮 Steam", mainProxyGroup }, { "🎮 Epic", mainProxyGroup }, { "🤖 OpenAI", usGroup }, { "🪟 Microsoft", mainProxyGroup }, { "✈️ Telegram", sgGroup }, { "📚 Wikipedia", mainProxyGroup }
+                { "🎬 YouTube", mainProxyGroup },
+                { "🎵 Spotify", mainProxyGroup },
+                { "🎮 Steam", mainProxyGroup },
+                { "🎮 Epic", mainProxyGroup },
+                { "🤖 OpenAI", usGroup },
+                { "🪟 Microsoft", mainProxyGroup },
+                { "✈️ Telegram", sgGroup },
+                { "📚 Wikipedia", mainProxyGroup }
             };
 
             List<Outbound> serviceOutbounds = new List<Outbound>();
-            foreach (var group in specialGroups) { serviceOutbounds.Add(new Outbound { type = "selector", tag = group.Key, outbounds = customGroupOptions, @default = group.Value }); }
+            foreach (var group in specialGroups)
+            {
+                serviceOutbounds.Add(new Outbound
+                {
+                    type = "selector",
+                    tag = group.Key,
+                    outbounds = customGroupOptions,
+                    @default = group.Value,
+                    interrupt_exist_connections = true
+                });
+            }
 
             sbConfig.outbounds.Add(mainProxyOutbound);
             sbConfig.outbounds.AddRange(regionOutbounds);
@@ -346,45 +410,117 @@ namespace LinkCubeConvert
             sbConfig.dns.strategy = "ipv4_only";
             sbConfig.dns.independent_cache = true;
 
-            sbConfig.dns.servers.Add(new DnsServer { tag = "remote", type = "https", server = "1.1.1.1", detour = mainProxyGroup });
-            sbConfig.dns.servers.Add(new DnsServer { tag = "local", type = "https", server = "223.5.5.5" });
+            // 构建严格的 DAG（有向无环图）彻底消灭依赖死锁！
+            // 1. 建立基于 OS 底层的 bootstrap 锚点
+            sbConfig.dns.servers.Add(new DnsServer { tag = "bootstrap", type = "local" });
+            // 2. DNS 服务器内部发包请求，统统交给最底层的 bootstrap 锚点去处理
+            sbConfig.dns.servers.Add(new DnsServer 
+            { 
+                tag = "remote", 
+                type = "https", 
+                server = "1.1.1.1", 
+                detour = mainProxyGroup, 
+                domain_resolver = "bootstrap" 
+            });
+            sbConfig.dns.servers.Add(new DnsServer 
+            { 
+                tag = "local", 
+                type = "https", 
+                server = "223.5.5.5", 
+                detour = "DIRECT", 
+                domain_resolver = "bootstrap" 
+            });
 
             sbConfig.dns.final = "remote";
 
-            if (proxyServerDomains.Count > 0) sbConfig.dns.rules.Add(new DnsRule { domain = proxyServerDomains.ToList(), server = "local" });
+            if (proxyServerDomains.Count > 0)
+            {
+                sbConfig.dns.rules.Add(new DnsRule
+                {
+                    domain = proxyServerDomains.ToList(),
+                    server = "local"
+                });
+            }
 
-            sbConfig.dns.rules.Add(new DnsRule { rule_set = new List<string> { "geosite-cn", "geosite-category-pt" }, server = "local" });
+            sbConfig.dns.rules.Add(new DnsRule
+            {
+                query_type = new List<string> { "HTTPS", "SVCB" },
+                action = "predefined",
+                rcode = "NOERROR"
+            });
 
-            sbConfig.route.default_domain_resolver = "local";
+            sbConfig.dns.rules.Add(new DnsRule 
+            { 
+                domain_suffix = new List<string> { "msftconnecttest.com", "msftncsi.com", "wns.windows.com" }, 
+                server = "local" 
+            });
+            sbConfig.dns.rules.Add(new DnsRule 
+            { 
+                rule_set = new List<string> { "geosite-cn", "geosite-category-pt" }, 
+                server = "local" 
+            });
+
             sbConfig.route.final = mainProxyGroup;
 
             sbConfig.route.rule_set = new List<SingboxRuleSet>
             {
-                new SingboxRuleSet { tag = "geoip-private", type = "inline", rules = new List<HeadlessRule> { new HeadlessRule { ip_cidr = new List<string> { "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8", "224.0.0.0/4", "255.255.255.255/32", "ff00::/8" } } } },
-                CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "geosite-category-ads-all", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-category-pt", "geosite", "geosite-category-pt", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-cn", "geosite", "geosite-cn", mainProxyGroup),
-                CreateRemoteRuleSet("geoip-cn", "geoip", "geoip-cn", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-youtube", "geosite", "geosite-youtube", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-spotify", "geosite", "geosite-spotify", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-steam", "geosite", "geosite-steam", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-epicgames", "geosite", "geosite-epicgames", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-openai", "geosite", "geosite-openai", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-microsoft", "geosite", "geosite-microsoft", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-telegram", "geosite", "geosite-telegram", mainProxyGroup),
-                CreateRemoteRuleSet("geoip-telegram", "geoip", "geoip-tg", mainProxyGroup),
-                CreateRemoteRuleSet("geosite-wikimedia", "geosite", "geosite-wikimedia", mainProxyGroup),
+                new SingboxRuleSet
+                {
+                    tag = "geoip-private",
+                    type = "inline",
+                    rules = new List<HeadlessRule> { new HeadlessRule { ip_cidr = new List<string>
+                    {
+                        "10.0.0.0/8",
+                        "172.16.0.0/12",
+                        "192.168.0.0/16",
+                        "127.0.0.0/8",
+                        "fd00::/8",
+                        "224.0.0.0/4",
+                        "255.255.255.255/32",
+                        "ff00::/8"
+                    } } }
+                },
+                CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "geosite-category-ads-all", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-category-pt", "geosite", "geosite-category-pt", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-cn", "geosite", "geosite-cn", ruleUpdateGroup),
+                CreateRemoteRuleSet("geoip-cn", "geoip", "geoip-cn", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-youtube", "geosite", "geosite-youtube", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-spotify", "geosite", "geosite-spotify", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-steam", "geosite", "geosite-steam", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-epicgames", "geosite", "geosite-epicgames", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-openai", "geosite", "geosite-openai", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-microsoft", "geosite", "geosite-microsoft", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-telegram", "geosite", "geosite-telegram", ruleUpdateGroup),
+                CreateRemoteRuleSet("geoip-telegram", "geoip", "geoip-tg", ruleUpdateGroup),
+                CreateRemoteRuleSet("geosite-wikimedia", "geosite", "geosite-wikimedia", ruleUpdateGroup),
             };
 
             sbConfig.route.rules = new List<RouteRule>
             {
-                // 1. 全局拦截与系统规则 (最高优先级)
-                new RouteRule { action = "sniff", timeout = "300ms" },
-                new RouteRule { port = new List<int> { 53 }, action = "hijack-dns" },
+                // 【优先级 0：L3/L4 物理层绝对阻断】(最快速度，不进嗅探)
+                // 1. 瞬间秒杀 IPv6，杜绝 300ms 空转等待
                 new RouteRule { ip_cidr = new List<string> { "::/0" }, action = "reject" },
 
-                // 2. 纯域名匹配阶段 (Fast Path) - 0延迟，绝不触发额外 DNS 查询
+                // 【优先级 1：受控的网关级劫持】(只作用于代理入口)
+                // 2. 劫持 DNS，并严格限制入口，防止误杀旁路由宿主机流量
+                new RouteRule { inbound = new List<string> { "tun-in", "mixed-in" }, port = new List<int> { 53 }, action = "hijack-dns" },
+
+                // 【优先级 2：局域网物理直连】(防路由死锁)
+                // 3. 局域网 IP 必须在嗅探前放行
+                new RouteRule { rule_set = new List<string> { "geoip-private" }, outbound = "DIRECT" },
+
+                // 【优先级 3：L7 协议嗅探器】(开始进行耗时操作)
+                // 4. 只对代理入口流量开启嗅探
+                new RouteRule { inbound = new List<string> { "tun-in", "mixed-in" }, action = "sniff", timeout = "300ms" },
+
+                // 【优先级 4：基于协议的安全直连】(基于真实协议特征)
+                // 5. 严格验证协议特征，只有真实 SSH 协议才能直连，废除盲目的 22 端口放行！
+                new RouteRule { protocol = new List<string> { "ssh" }, outbound = "DIRECT" },
+
+                // 【优先级 5：WebRTC 与 Fast Path (域名分流)】
+                new RouteRule { port = new List<int> { 3478, 3479, 19302, 19303 }, network = new List<string> { "udp" }, action = "reject" },
                 new RouteRule { rule_set = new List<string> { "geosite-category-ads-all" }, action = "reject" },
+
                 new RouteRule { rule_set = new List<string> { "geosite-youtube" }, outbound = "🎬 YouTube" },
                 new RouteRule { rule_set = new List<string> { "geosite-spotify" }, outbound = "🎵 Spotify" },
                 new RouteRule { rule_set = new List<string> { "geosite-steam" }, outbound = "🎮 Steam" },
@@ -393,30 +529,37 @@ namespace LinkCubeConvert
                 new RouteRule { rule_set = new List<string> { "geosite-microsoft" }, outbound = "🪟 Microsoft" },
                 new RouteRule { rule_set = new List<string> { "geosite-telegram" }, outbound = "✈️ Telegram" },
                 new RouteRule { rule_set = new List<string> { "geosite-wikimedia" }, outbound = "📚 Wikipedia" },
-                
-                // 将国内外直连的域名规则提取到 resolve 之前
+
                 new RouteRule { rule_set = new List<string> { "geosite-cn", "geosite-category-pt" }, outbound = "DIRECT" },
 
-                // 基于端口的物理封杀 (不需要 DNS)
+                // 【优先级 6：Slow Path (纯 IP 匹配)】
                 new RouteRule { port = new List<int> { 443 }, network = new List<string> { "udp" }, action = "reject" },
                 new RouteRule { ip_cidr = new List<string> { "223.5.5.5/32", "1.1.1.1/32" }, outbound = "DIRECT" },
-
-                // 3. 【分水岭】：强制 DNS 解析！ 将剩下所有不认识的未知域名，强制转换为 IP，防止绕过。
-                new RouteRule { action = "resolve", strategy = "ipv4_only" },
-
-                // 4. 纯 IP 匹配阶段 (Slow Path) - 依赖分水岭解析出的真实 IP
-                new RouteRule { rule_set = new List<string> { "geoip-private", "geoip-cn" }, outbound = "DIRECT" },
+                new RouteRule { rule_set = new List<string> { "geoip-cn" }, outbound = "DIRECT" },
                 new RouteRule { rule_set = new List<string> { "geoip-telegram" }, outbound = "✈️ Telegram" }
             };
 
-            var jsonOptions = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+            var jsonOptions = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
             File.WriteAllText(outputFile, JsonSerializer.Serialize(sbConfig, jsonOptions));
             Console.WriteLine($"[SUCCESS] Saved to {outputFile}");
         }
 
         static SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName, string downloadDetour)
         {
-            return new SingboxRuleSet { tag = tag, type = "remote", format = "binary", url = $"https://raw.githubusercontent.com/SagerNet/sing-{repoType}/rule-set/{fileName}.srs", download_detour = downloadDetour };
+            return new SingboxRuleSet
+            {
+                tag = tag,
+                type = "remote",
+                format = "binary",
+                url = $"https://raw.githubusercontent.com/SagerNet/sing-{repoType}/rule-set/{fileName}.srs",
+                download_detour = downloadDetour,
+                update_interval = "1d"
+            };
         }
 
         static bool IsIpAddress(string host) => System.Net.IPAddress.TryParse(host, out _);
