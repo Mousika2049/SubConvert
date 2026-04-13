@@ -4,549 +4,465 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace LinkCubeConvert;
 
-public class ClashConfig
+public record ClashConfig
 {
-    [YamlMember(Alias = "proxies")] required public List<Dictionary<string, object>> Proxies { get; set; }
-    [YamlMember(Alias = "proxy-groups")] required public List<ClashProxyGroup> ProxyGroups { get; set; }
+    [YamlMember(Alias = "proxies")]
+    public List<Dictionary<string, object>> Proxies { get; init; } = [];
 }
 
-public class ClashProxyGroup
+public record SingboxConfig
 {
-    [YamlMember(Alias = "name")] required public string Name { get; set; }
-    [YamlMember(Alias = "type")] required public string Type { get; set; }
-    [YamlMember(Alias = "proxies")] required public List<string> Proxies { get; set; }
+    [JsonPropertyName("log")] public LogConfig Log { get; init; } = new();
+    [JsonPropertyName("dns")] public DnsConfig Dns { get; init; } = new();
+    [JsonPropertyName("inbounds")] public List<Inbound> Inbounds { get; init; } = [];
+    [JsonPropertyName("outbounds")] public List<Outbound> Outbounds { get; init; } = [];
+    [JsonPropertyName("route")] public RouteConfig Route { get; init; } = new();
+    [JsonPropertyName("experimental")] public ExperimentalConfig? Experimental { get; init; }
 }
 
-public class SingboxConfig
+public record LogConfig
 {
-    public LogConfig log { get; set; } = new();
-    public DnsConfig dns { get; set; } = new();
-    public List<Inbound> inbounds { get; set; } = [];
-    public List<Outbound> outbounds { get; set; } = [];
-    public RouteConfig route { get; set; } = new();
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public ExperimentalConfig experimental { get; set; }
+    [JsonPropertyName("level")] public string Level { get; init; } = "warn";
+    [JsonPropertyName("timestamp")] public bool Timestamp { get; init; } = true;
 }
 
-public class LogConfig
+public record DnsConfig
 {
-    public string level { get; set; } = "warn";
-    public bool timestamp { get; set; } = true;
+    [JsonPropertyName("servers")] public List<DnsServer> Servers { get; init; } = [];
+    [JsonPropertyName("rules")] public List<DnsRule> Rules { get; init; } = [];
+    [JsonPropertyName("final")] public string? Final { get; init; } = "remote";
+    [JsonPropertyName("strategy")] public string? Strategy { get; init; } = "ipv4_only";
+    [JsonPropertyName("reverse_mapping")] public bool? ReverseMapping { get; init; } = true;
 }
 
-public class DnsConfig
+public record DnsServer
 {
-    public List<DnsServer> servers { get; set; } = [];
-    public List<DnsRule> rules { get; set; } = [];
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string final { get; set; }
-    public string strategy { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? reverse_mapping { get; set; }
+    [JsonPropertyName("tag")] public string? Tag { get; init; }
+    [JsonPropertyName("type")] public string? Type { get; init; }
+    [JsonPropertyName("server")] public string? Server { get; init; }
+    [JsonPropertyName("detour")] public string? Detour { get; init; }
 }
 
-public class DnsServer
+public record DnsRule
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string tag { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string type { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? server_port { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string detour { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string domain_resolver { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string address_strategy { get; set; }
+    [JsonPropertyName("rule_set")] public List<string>? RuleSet { get; init; }
+    [JsonPropertyName("domain")] public List<string>? Domain { get; init; }
+    [JsonPropertyName("domain_suffix")] public List<string>? DomainSuffix { get; init; }
+    [JsonPropertyName("query_type")] public List<string>? QueryType { get; init; }
+    [JsonPropertyName("action")] public string? Action { get; init; }
+    [JsonPropertyName("server")] public string? Server { get; init; }
+    [JsonPropertyName("rcode")] public string? Rcode { get; init; }
 }
 
-public class DnsRule
+public record Inbound
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain_suffix { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> query_type { get; set; }
-    
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string action { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string rcode { get; set; }
+    [JsonPropertyName("type")] public string? Type { get; init; }
+    [JsonPropertyName("tag")] public string? Tag { get; init; }
+    [JsonPropertyName("listen")] public string? Listen { get; init; }
+    [JsonPropertyName("listen_port")] public int? ListenPort { get; init; }
+    [JsonPropertyName("address")] public List<string>? Address { get; init; }
+    [JsonPropertyName("auto_route")] public bool? AutoRoute { get; init; }
+    [JsonPropertyName("strict_route")] public bool? StrictRoute { get; init; }
+    [JsonPropertyName("stack")] public string? Stack { get; init; }
+    [JsonPropertyName("mtu")] public int? Mtu { get; init; }
 }
 
-public class Inbound
+public record Outbound
 {
-    public string type { get; set; }
-    public string tag { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string listen { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? listen_port { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> address { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? auto_route { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? strict_route { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string stack { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? mtu { get; set; }
+    [JsonPropertyName("type")] public string? Type { get; init; }
+    [JsonPropertyName("tag")] public string? Tag { get; init; }
+    [JsonPropertyName("server")] public string? Server { get; init; }
+    [JsonPropertyName("server_port")] public int? ServerPort { get; init; }
+
+    // VLESS 核心字段
+    [JsonPropertyName("uuid")] public string? Uuid { get; init; }
+    [JsonPropertyName("flow")] public string? Flow { get; init; }
+    [JsonPropertyName("packet_encoding")] public string? PacketEncoding { get; init; }
+
+    [JsonPropertyName("password")] public string? Password { get; init; }
+    [JsonPropertyName("outbounds")] public List<string>? Outbounds { get; init; }
+    [JsonPropertyName("default")] public string? Default { get; init; }
+    [JsonPropertyName("tls")] public OutboundTls? Tls { get; init; }
+    [JsonPropertyName("domain_resolver")] public string? DomainResolver { get; init; }
+    [JsonPropertyName("tcp_fast_open")] public bool? TcpFastOpen { get; init; }
+    [JsonPropertyName("connect_timeout")] public string? ConnectTimeout { get; init; }
+    [JsonPropertyName("interrupt_exist_connections")] public bool? InterruptExistConnections { get; init; }
 }
 
-public class Outbound
+public record Utls
 {
-    public string type { get; set; }
-    public string tag { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? server_port { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string password { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> outbounds { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string @default { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OutboundTls tls { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string domain_resolver { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string tcp_keep_alive { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string tcp_keep_alive_interval { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? tcp_fast_open { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string connect_timeout { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string url { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string interval { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? tolerance { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string idle_timeout { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? interrupt_exist_connections { get; set; }
+    [JsonPropertyName("enabled")] public bool Enabled { get; init; }
+    [JsonPropertyName("fingerprint")] public string? Fingerprint { get; init; }
 }
 
-public class Utls
+public record OutboundTls
 {
-    public bool enabled { get; set; } = true;
-    public string fingerprint { get; set; } = "chrome";
+    [JsonPropertyName("enabled")] public bool Enabled { get; init; } = true;
+    [JsonPropertyName("server_name")] public string? ServerName { get; init; }
+    [JsonPropertyName("insecure")] public bool? Insecure { get; init; }
+    [JsonPropertyName("utls")] public Utls? Utls { get; init; }
+    [JsonPropertyName("alpn")] public List<string>? Alpn { get; init; }
+    [JsonPropertyName("min_version")] public string? MinVersion { get; init; }
+    // REALITY 支持
+    [JsonPropertyName("reality")] public OutboundReality? Reality { get; init; }
+}
+// REALITY 配置模型
+public record OutboundReality
+{
+    [JsonPropertyName("enabled")] public bool Enabled { get; init; }
+    [JsonPropertyName("public_key")] public string? PublicKey { get; init; }
+    [JsonPropertyName("short_id")] public string? ShortId { get; init; }
+}
+public record RouteConfig
+{
+    [JsonPropertyName("rule_set")] public List<SingboxRuleSet> RuleSet { get; init; } = [];
+    [JsonPropertyName("rules")] public List<RouteRule> Rules { get; init; } = [];
+    [JsonPropertyName("final")] public string? Final { get; init; } = Constants.MainProxyGroup;
+    [JsonPropertyName("auto_detect_interface")] public bool? AutoDetectInterface { get; init; } = true;
 }
 
-public class OutboundTls
+public record SingboxRuleSet
 {
-    public bool enabled { get; set; } = true;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string server_name { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? insecure { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Utls utls { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> alpn { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string min_version { get; set; }
+    [JsonPropertyName("type")] public string? Type { get; init; }
+    [JsonPropertyName("tag")] public string? Tag { get; init; }
+    [JsonPropertyName("format")] public string? Format { get; init; }
+    [JsonPropertyName("url")] public string? Url { get; init; }
+    [JsonPropertyName("download_detour")] public string? DownloadDetour { get; init; }
+    [JsonPropertyName("update_interval")] public string? UpdateInterval { get; init; }
 }
 
-public class RouteConfig
+public record RouteRule
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<SingboxRuleSet> rule_set { get; set; } = [];
-    public List<RouteRule> rules { get; set; } = [];
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string final { get; set; }
-    
-    // 【平台隔离核心参数】：开放操作系统专属接管权限
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? auto_detect_interface { get; set; }
+    [JsonPropertyName("inbound")] public List<string>? Inbound { get; init; }
+    [JsonPropertyName("protocol")] public List<string>? Protocol { get; init; }
+    [JsonPropertyName("port")] public List<int>? Port { get; init; }
+    [JsonPropertyName("network")] public List<string>? Network { get; init; }
+    [JsonPropertyName("action")] public string? Action { get; init; }
+    [JsonPropertyName("rule_set")] public List<string>? RuleSet { get; init; }
+    [JsonPropertyName("ip_cidr")] public List<string>? IpCidr { get; init; }
+    [JsonPropertyName("ip_is_private")] public bool? IpIsPrivate { get; init; }
+    [JsonPropertyName("outbound")] public string? Outbound { get; init; }
+    [JsonPropertyName("timeout")] public string? Timeout { get; init; }
 }
 
-public class SingboxRuleSet
+public record ExperimentalConfig
 {
-    public string type { get; set; }
-    public string tag { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string format { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string url { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string download_detour { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string update_interval { get; set; }
+    [JsonPropertyName("cache_file")] public CacheFileConfig? CacheFile { get; init; }
+    [JsonPropertyName("clash_api")] public ClashApiConfig? ClashApi { get; init; }
 }
 
-public class HeadlessRule
+public record CacheFileConfig
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain_suffix { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> domain_keyword { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> ip_cidr { get; set; }
+    [JsonPropertyName("enabled")] public bool Enabled { get; init; }
+    [JsonPropertyName("path")] public string? Path { get; init; }
+    [JsonPropertyName("cache_id")] public string? CacheId { get; init; }
 }
 
-public class RouteRule
+public record ClashApiConfig
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> inbound { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> protocol { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<int> port { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> network { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string action { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> rule_set { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string> ip_cidr { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ip_is_private { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string outbound { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string timeout { get; set; }
+    [JsonPropertyName("external_controller")] public string? ExternalController { get; init; }
+    [JsonPropertyName("external_ui")] public string? ExternalUi { get; init; }
+    [JsonPropertyName("secret")] public string? Secret { get; init; }
 }
 
-public class ExperimentalConfig
+public static class Constants
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public CacheFileConfig cache_file { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public ClashApiConfig clash_api { get; set; }
-}
+    public const string MainProxyGroup = "🚀 PROXIES";
+    public const string Direct = "DIRECT";
 
-public class CacheFileConfig
-{
-    public bool enabled { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string path { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string cache_id { get; set; }
-}
-
-public class ClashApiConfig
-{
-    public string external_controller { get; set; }
-    public string external_ui { get; set; }
-    public string secret { get; set; }
-}
-
-class Program
-{
-    private const string InputFile = "1.yaml";
-    private const string MainProxyGroup = "🚀 PROXIES";
-
-    static string GetContentHash(string content)
+    public static readonly Dictionary<string, Regex> RegionRegexes = new()
     {
-        using var md5 = MD5.Create();
-        var hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(content));
-        return Convert.ToHexString(hashBytes)[..8].ToLower();
-    }
+        { "🇭🇰 香港", new Regex(@"(?i)香港|hong\s?kong|深港|🇭🇰|(?<![a-zA-Z])hkg?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
+        { "🇸🇬 狮城", new Regex(@"(?i)狮城|新加坡|singapore|🇸🇬|(?<![a-zA-Z])sgp?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
+        { "🇯🇵 日本", new Regex(@"(?i)日本|japan|tokyo|东京|大阪|🇯🇵|(?<![a-zA-Z])jpn?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
+        { "🇺🇸 美国", new Regex(@"(?i)美国|america|洛杉矶|硅谷|🇺🇸|(?<![a-zA-Z])usa?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
+        { "🇹🇼 台湾", new Regex(@"(?i)台湾|taiwan|taipei|台北|🇹🇼|(?<![a-zA-Z])tw\d*(?![a-zA-Z])", RegexOptions.Compiled) }
+    };
+}
 
-    static void Main()
+public static class ClashParser
+{
+    public static ClashConfig? Parse(string yamlContent)
     {
-        if (!TryLoadClashConfig(InputFile, out var clashConfig)) return;
-
-        var yamlContent = File.ReadAllText(InputFile);
-        string configHashId = GetContentHash(yamlContent); 
-
-        // 【多态生成】：一次执行，吐出两大平台的极致专属优化配置
-        GenerateForPlatform(clashConfig, configHashId, "windows");
-        GenerateForPlatform(clashConfig, configHashId, "android");
-    }
-
-    static void GenerateForPlatform(ClashConfig clashConfig, string configHashId, string platform)
-    {
-        var sbConfig = CreateBaseSingboxConfig(configHashId);
-        AddDefaultInbounds(sbConfig);
-        AddDirectOutbound(sbConfig);
-
-        var proxyServerDomains = new HashSet<string>();
-        var allNodeNames = new List<string>();
-        AddTrojanOutbounds(clashConfig, sbConfig, proxyServerDomains, allNodeNames);
-
-        var (finalRegionGroupNames, regionOutbounds) = BuildRegionOutbounds(clashConfig);
-        var mainGroupOptions = BuildMainGroupOptions(finalRegionGroupNames, allNodeNames);
-
-        sbConfig.outbounds.Add(CreateMainProxyOutbound(mainGroupOptions, finalRegionGroupNames, allNodeNames));
-        sbConfig.outbounds.AddRange(regionOutbounds);
-        sbConfig.outbounds.AddRange(CreateServiceOutbounds(mainGroupOptions, finalRegionGroupNames));
-
-        ConfigureDns(sbConfig, proxyServerDomains, MainProxyGroup);
-        
-        // 传递平台标识进行路由层原生接管
-        ConfigureRoute(sbConfig, MainProxyGroup, platform);
-
-        string outputFile = $"config_{platform}.json";
-        File.WriteAllText(outputFile, JsonSerializer.Serialize(sbConfig, CreateJsonOptions()));
-        Console.WriteLine($"[SUCCESS] Built {platform.ToUpper()} preset -> {outputFile}");
-    }
-
-    static bool TryLoadClashConfig(string inputFile, out ClashConfig clashConfig)
-    {
-        clashConfig = null!;
-        if (!File.Exists(inputFile)) return false;
-
-        var yamlContent = File.ReadAllText(inputFile);
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(HyphenatedNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
             .Build();
-
         try
         {
-            clashConfig = deserializer.Deserialize<ClashConfig>(yamlContent);
-            return clashConfig != null;
+            return deserializer.Deserialize<ClashConfig>(yamlContent);
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            Console.WriteLine($"[ERROR] YAML Parsing failed: {ex.Message}");
+            return null;
         }
     }
+}
 
-    static SingboxConfig CreateBaseSingboxConfig(string configHashId) => new()
+public class SingboxConfigBuilder
+{
+    private readonly LogConfig _log = new();
+    private readonly DnsConfig _dns = new();
+    private readonly List<Inbound> _inbounds = [];
+    private readonly RouteConfig _route = new();
+    private ExperimentalConfig? _experimental;
+
+    // 构建过程中的状态变量
+    private readonly HashSet<string> _proxyServerDomains = [];
+    private readonly List<string> _allNodeNames = [];
+    private readonly List<string> _finalRegionGroupNames = [];
+
+    private Outbound? _directOutbound;
+    private readonly List<Outbound> _nodeOutbounds = [];
+    private readonly List<Outbound> _regionOutbounds = [];
+    private readonly List<Outbound> _mainOutbounds = [];
+    private readonly List<Outbound> _serviceOutbounds = [];
+
+    public SingboxConfigBuilder WithExperimental(string configHashId, bool includeClashApi)
     {
-        experimental = new ExperimentalConfig
+        _experimental = new ExperimentalConfig
         {
-            cache_file = new CacheFileConfig
-            {
-                enabled = true,
-                path = "cache.db",
-                cache_id = configHashId
-            },
-            clash_api = new ClashApiConfig
-            {
-                external_controller = "127.0.0.1:9999",
-                external_ui = "ui",
-                secret = "127001"
-            }
-        }
-    };
-
-    static void AddDefaultInbounds(SingboxConfig sbConfig)
-    {
-        sbConfig.inbounds.Add(new Inbound
-        {
-            type = "tun",
-            tag = "tun-in",
-            address = ["172.19.0.1/30", "fd00::1/126"],
-            auto_route = true,
-            strict_route = true,
-            stack = "system",
-            mtu = 1350
-        });
-
-        sbConfig.inbounds.Add(new Inbound
-        {
-            type = "mixed",
-            tag = "mixed-in",
-            listen = "127.0.0.1",
-            listen_port = 8848
-        });
+            CacheFile = new CacheFileConfig { Enabled = true, Path = "cache.db", CacheId = configHashId },
+            // 如果不包含 Clash API，则赋值为 null，序列化时会自动忽略该字段
+            ClashApi = includeClashApi 
+                ? new ClashApiConfig { ExternalController = "127.0.0.1:9999", ExternalUi = "ui", Secret = "127001" } 
+                : null
+        };
+        return this;
     }
 
-    static void AddDirectOutbound(SingboxConfig sbConfig)
+    public SingboxConfigBuilder WithDefaultInbounds()
     {
-        sbConfig.outbounds.Add(new Outbound
+        _inbounds.Add(new Inbound
         {
-            type = "direct",
-            tag = "DIRECT",
-            domain_resolver = "local"
+            Type = "tun", 
+            Tag = "tun-in", 
+            Address = ["172.19.0.1/30", "fd00::1/126"], 
+            AutoRoute = true, 
+            StrictRoute = true, 
+            Stack = "system",
+            Mtu = 1350,
         });
+        _inbounds.Add(new Inbound { Type = "mixed", Tag = "mixed-in", Listen = "127.0.0.1", ListenPort = 8848 });
+        return this;
     }
 
-    static void AddTrojanOutbounds(
-        ClashConfig clashConfig,
-        SingboxConfig sbConfig,
-        HashSet<string> proxyServerDomains,
-        List<string> allNodeNames)
+    public SingboxConfigBuilder WithDirectOutbound()
     {
-        if (clashConfig.Proxies == null) return;
+        _directOutbound = new Outbound { Type = "direct", Tag = Constants.Direct, DomainResolver = "local" };
+        return this;
+    }
+
+    public SingboxConfigBuilder WithProxyNodes(ClashConfig clashConfig)
+    {
+        if (clashConfig.Proxies == null) return this;
 
         foreach (var p in clashConfig.Proxies)
         {
-            if (p.TryGetValue("type", out var typeObj) && typeObj.ToString() == "trojan")
+            if (!p.TryGetValue("type", out var typeObj)) continue;
+            string type = typeObj.ToString()!;
+
+            if (type != "trojan" && type != "vless") continue;
+
+            string name = p["name"].ToString()!;
+            string server = p["server"].ToString()!;
+            int port = int.Parse(p["port"].ToString()!);
+
+            _allNodeNames.Add(name);
+            if (!IPAddress.TryParse(server, out _)) _proxyServerDomains.Add(server);
+
+            OutboundTls? tlsConfig = ExtractTlsConfig(p, type, server);
+
+            Outbound? outbound = type switch
             {
-                string name = p["name"].ToString()!;
-                string server = p["server"].ToString()!;
-                allNodeNames.Add(name);
+                "trojan" => BuildTrojanOutbound(p, name, server, port, tlsConfig),
+                "vless"  => BuildVlessOutbound(p, name, server, port, tlsConfig),
+                _        => null // 兜底安全策略
+            };
 
-                if (!IPAddress.TryParse(server, out _)) proxyServerDomains.Add(server);
-
-                sbConfig.outbounds.Add(new Outbound
-                {
-                    type = "trojan",
-                    tag = name,
-                    server = server,
-                    server_port = int.Parse(p["port"].ToString()!),
-                    password = p["password"].ToString(),
-
-                    domain_resolver = "node-resolver",
-
-                    tcp_keep_alive = "5m",
-                    tcp_keep_alive_interval = "75s",
-                    tcp_fast_open = true,
-                    connect_timeout = "5s",
-
-                    tls = new OutboundTls
-                    {
-                        enabled = true,
-                        server_name = p.TryGetValue("sni", out var sniObj) ? sniObj.ToString() : server,
-                        insecure = p.TryGetValue("skip-cert-verify", out var skipCert) && bool.TryParse(skipCert.ToString(), out var b) && b ? true : null,
-                        utls = new Utls { enabled = true, fingerprint = "chrome" },
-                        alpn = ["h2", "http/1.1"],
-                        min_version = "1.3"
-                    }
-                });
+            if (outbound != null)
+            {
+                _nodeOutbounds.Add(outbound);
             }
         }
+        return this;
     }
-
-    static (List<string> finalRegionGroupNames, List<Outbound> regionOutbounds) BuildRegionOutbounds(ClashConfig clashConfig)
+    private Outbound BuildTrojanOutbound(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
     {
-        var finalRegionGroupNames = new List<string>();
-        var regionOutbounds = new List<Outbound>();
-
-        var regionMappings = new Dictionary<string, string[]>
+        return new Outbound
         {
-            { "🇭🇰", ["hk", "香港", "hongkong", "🇭🇰"] },
-            { "🇸🇬", ["sg", "狮城", "新加坡", "singapore", "🇸🇬"] },
-            { "🇯🇵", ["jp", "日本", "japan", "tokyo", "🇯🇵"] },
-            { "🇺🇸", ["us", "美国", "america", "usa", "🇺🇸"] },
-            { "🇹🇼", ["tw", "台湾", "taiwan", "taipei", "🇹🇼"] }
+            Type = "trojan",
+            Tag = name,
+            Server = server,
+            ServerPort = port,
+            DomainResolver = "node-resolver",
+            TcpFastOpen = true,
+            ConnectTimeout = "5s",
+            Password = p.TryGetValue("password", out var pwd) ? pwd.ToString() : "",
+            Tls = tlsConfig
         };
+    }
 
-        if (clashConfig.ProxyGroups == null) return (finalRegionGroupNames, regionOutbounds);
-
-        foreach (var g in clashConfig.ProxyGroups)
+    private Outbound BuildVlessOutbound(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
+    {
+        return new Outbound
         {
-            string lowerName = g.Name.ToLower();
-            var matchedEmoji = regionMappings.FirstOrDefault(kvp => kvp.Value.Any(lowerName.Contains)).Key;
+            Type = "vless",
+            Tag = name,
+            Server = server,
+            ServerPort = port,
+            DomainResolver = "node-resolver",
+            TcpFastOpen = true,
+            ConnectTimeout = "5s",
+            Uuid = p.TryGetValue("uuid", out var id) ? id.ToString() : "",
+            Flow = p.TryGetValue("flow", out var f) ? f.ToString() : null,
+            PacketEncoding = "xudp", // VLESS 推荐
+            Tls = tlsConfig
+        };
+    }
 
-            if (matchedEmoji != null)
+    private OutboundTls? ExtractTlsConfig(Dictionary<string, object> p, string type, string server)
+    {
+        bool isTls = p.TryGetValue("tls", out var tlsObj) && bool.TryParse(tlsObj.ToString(), out var b) && b;
+        bool isReality = p.ContainsKey("reality-opts");
+
+        // 如果既没标 tls，也不是 reality，且不是天生走 tls 的 trojan，则返回 null
+        if (type != "trojan" && !isTls && !isReality) return null;
+
+        // 提取 Reality 专属
+        OutboundReality? realityConfig = null;
+        if (isReality && p["reality-opts"] is Dictionary<object, object> realityOpts)
+        {
+            realityConfig = new OutboundReality
             {
-                string formattedGroupName = g.Name.Contains(matchedEmoji) ? g.Name : $"{matchedEmoji} {g.Name}";
-                finalRegionGroupNames.Add(formattedGroupName);
+                Enabled = true,
+                PublicKey = realityOpts.TryGetValue("public-key", out var pk) ? pk.ToString() : null,
+                ShortId = realityOpts.TryGetValue("short-id", out var sid) ? sid.ToString() : null
+            };
+        }
 
-                string outType = g.Type == "select" ? "selector" : "urltest";
-                var mappedOutbounds = g.Proxies.Where(p => p != "REJECT").ToList();
+        // 提取指纹
+        string fp = p.TryGetValue("client-fingerprint", out var fpObj) ? fpObj.ToString()! : "firefox";
 
-                regionOutbounds.Add(new Outbound
+        // 优雅处理 sni、servername 与 fallback 逻辑，杜绝空指针异常
+        string serverName = server; // 默认 fallback 到 server
+        if (p.TryGetValue("sni", out var sniObj)) 
+            serverName = sniObj.ToString()!;
+        else if (p.TryGetValue("servername", out var snObj)) 
+            serverName = snObj.ToString()!;
+
+        return new OutboundTls
+        {
+            Enabled = true,
+            ServerName = serverName,
+            Insecure = p.TryGetValue("skip-cert-verify", out var skipCert) && bool.TryParse(skipCert.ToString(), out var insec) ? insec : null,
+            Utls = new Utls { Enabled = true, Fingerprint = fp },
+            Alpn = ["h2", "http/1.1"],
+            MinVersion = "1.3",
+            Reality = realityConfig
+        };
+    }    
+    public SingboxConfigBuilder WithRegionOutbounds()
+    {
+        foreach (var region in Constants.RegionRegexes)
+        {
+            string groupName = region.Key;
+            var matchedNodes = _allNodeNames.Where(name => region.Value.IsMatch(name)).ToList();
+
+            if (matchedNodes.Count >= 2)
+            {
+                _finalRegionGroupNames.Add(groupName);
+                _regionOutbounds.Add(new Outbound
                 {
-                    type = outType,
-                    tag = formattedGroupName,
-                    outbounds = mappedOutbounds,
-                    @default = outType == "selector" ? mappedOutbounds.FirstOrDefault() : null,
-                    
-                    url = outType == "urltest" ? "https://www.gstatic.com/generate_204" : null,
-                    interval = outType == "urltest" ? "10m" : null, 
-                    tolerance = outType == "urltest" ? 50 : null,
-                    idle_timeout = outType == "urltest" ? "30m" : null,
-                    
-                    interrupt_exist_connections = outType == "selector" ? true : null
+                    Type = "selector",
+                    Tag = groupName,
+                    Outbounds = matchedNodes,
+                    Default = matchedNodes.FirstOrDefault(),
+                    InterruptExistConnections = true
                 });
             }
         }
-
-        return (finalRegionGroupNames, regionOutbounds);
+        return this;
     }
 
-    static List<string> BuildMainGroupOptions(List<string> finalRegionGroupNames, List<string> allNodeNames)
+    public SingboxConfigBuilder WithProxyGroups()
     {
-        var mainGroupOptions = new List<string>(finalRegionGroupNames);
-        mainGroupOptions.Add("DIRECT");
-        mainGroupOptions.AddRange(allNodeNames);
-        return mainGroupOptions;
-    }
+        var mainGroupOptions = new List<string>(_finalRegionGroupNames);
+        mainGroupOptions.AddRange(_allNodeNames);
+        mainGroupOptions.Add(Constants.Direct);
 
-    static Outbound CreateMainProxyOutbound(List<string> mainGroupOptions, List<string> finalRegionGroupNames, List<string> allNodeNames) => new()
-    {
-        type = "selector",
-        tag = MainProxyGroup,
-        outbounds = mainGroupOptions,
-        @default = finalRegionGroupNames.FirstOrDefault() ?? allNodeNames.FirstOrDefault(),
-        interrupt_exist_connections = true
-    };
+        _mainOutbounds.Add(new Outbound
+        {
+            Type = "selector",
+            Tag = Constants.MainProxyGroup,
+            Outbounds = mainGroupOptions,
+            Default = _finalRegionGroupNames.FirstOrDefault() ?? _allNodeNames.FirstOrDefault() ?? Constants.Direct,
+            InterruptExistConnections = true
+        });
 
-    static List<Outbound> CreateServiceOutbounds(List<string> mainGroupOptions, List<string> finalRegionGroupNames)
-    {
-        var customGroupOptions = new List<string> { MainProxyGroup };
-        customGroupOptions.AddRange(mainGroupOptions);
+        var serviceGroupOptions = new List<string> { Constants.MainProxyGroup };
+        serviceGroupOptions.AddRange(_finalRegionGroupNames);
+        serviceGroupOptions.AddRange(_allNodeNames);
+        serviceGroupOptions.Add(Constants.Direct);
 
-        string usGroup = finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? MainProxyGroup;
-        string sgGroup = finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇸🇬")) ?? MainProxyGroup;
+        string usGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? Constants.MainProxyGroup;
+        string sgGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇸🇬")) ?? Constants.MainProxyGroup;
+        string hkGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? Constants.MainProxyGroup;
 
         var specialGroups = new Dictionary<string, string>
         {
-            { "🎬 YouTube", MainProxyGroup },
-            { "🎵 Spotify", MainProxyGroup },
-            { "🎮 Steam", MainProxyGroup },
+            { "🎬 YouTube", Constants.MainProxyGroup },
+            { "🎵 Spotify", Constants.MainProxyGroup },
+            { "🎮 Steam", hkGroup },
             { "🤖 AI", usGroup },
-            { "🪟 Microsoft", MainProxyGroup },
+            { "🪟 Microsoft", hkGroup },
             { "✈️ Telegram", sgGroup },
-            { "📚 Wikipedia", MainProxyGroup }
-        };
+        };  
 
-        return [.. specialGroups.Select(group => new Outbound
+        _serviceOutbounds.AddRange(specialGroups.Select(group => new Outbound
         {
-            type = "selector",
-            tag = group.Key,
-            outbounds = customGroupOptions,
-            @default = group.Value,
-            interrupt_exist_connections = true
-        })];
+            Type = "selector",
+            Tag = group.Key,
+            Outbounds = serviceGroupOptions,
+            Default = group.Value,
+            InterruptExistConnections = true
+        }));   
+
+        return this;
     }
 
-    static void ConfigureDns(SingboxConfig sbConfig, HashSet<string> proxyServerDomains, string mainProxyGroup)
+    public SingboxConfigBuilder WithDns()
     {
-        sbConfig.dns.strategy = "ipv4_only";
-        sbConfig.dns.reverse_mapping = true;
+        _dns.Servers.AddRange([
+            new DnsServer { Tag = "bootstrap", Type = "local" },
+            new DnsServer { Tag = "node-resolver", Type = "https", Server = "223.5.5.5" },
+            new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = Constants.MainProxyGroup },
+            new DnsServer { Tag = "local", Type = "https", Server = "223.5.5.5" }
+        ]);
 
-        sbConfig.dns.servers.Add(new DnsServer 
-        { 
-            tag = "bootstrap", 
-            type = "local", 
-        });  
-
-        sbConfig.dns.servers.Add(new DnsServer
-        {
-            tag = "node-resolver",
-            type = "https",
-            server = "dns.alidns.com",
-            detour = "DIRECT",
-            domain_resolver = "bootstrap",
-        });
+        _dns.Rules.Add(new DnsRule { QueryType = ["AAAA", "HTTPS", "SVCB"], Action = "predefined", Rcode = "NOERROR" });
+        _dns.Rules.Add(new DnsRule { RuleSet = ["geosite-category-ads-all"], Action = "predefined", Rcode = "NOERROR" });      
         
-        sbConfig.dns.servers.Add(new DnsServer
+        if (_proxyServerDomains.Count > 0)
         {
-            tag = "remote",
-            type = "https",
-            server = "cloudflare-dns.com",   
-            detour = mainProxyGroup,
-            domain_resolver = "bootstrap",
+            _dns.Rules.Add(new DnsRule { Domain = [.. _proxyServerDomains], Action = "route", Server = "node-resolver" });
+        } 
 
-        });
-        
-        sbConfig.dns.servers.Add(new DnsServer
-        {
-            tag = "local",
-            type = "https",
-            server = "dns.alidns.com",
-            detour = "DIRECT",
-            domain_resolver = "bootstrap",
-        });
+        _dns.Rules.Add(new DnsRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Server = "local" });
 
-        sbConfig.dns.final = "remote";
-
-                sbConfig.dns.rules.Add(new DnsRule
-        {
-            query_type = ["AAAA"],
-            action = "reject"
-        });
-
-        sbConfig.dns.rules.Add(new DnsRule
-        {
-            query_type = ["HTTPS", "SVCB"],
-            action = "predefined",
-            rcode = "NOERROR"
-        });
-
-        if (proxyServerDomains.Count > 0)
-        {
-            sbConfig.dns.rules.Add(new DnsRule
-            {
-                domain = [.. proxyServerDomains],
-                action = "route",
-                server = "node-resolver"
-            });
-        }
-
-        sbConfig.dns.rules.Add(new DnsRule
-        {
-            domain_suffix = ["msftconnecttest.com", "msftncsi.com", "wns.windows.com"],
-            action = "route",
-            server = "local"
-        });
-        
-        sbConfig.dns.rules.Add(new DnsRule
-        {
-            rule_set = ["geosite-cn", "geosite-category-pt"],
-            action = "route",
-            server = "local"
-        });
+        return this;
     }
 
-    static void ConfigureRoute(SingboxConfig sbConfig, string mainProxyGroup, string platform)
+    public SingboxConfigBuilder WithRouting()
     {
-        sbConfig.route.final = mainProxyGroup;
-        
-        // 【审查警告：已强行删除默认解析器兜底】1.14 彻底移除 default_domain_resolver，这里保持最干净状态。
-
-        // 【平台专属优化拦截】
-        if (platform == "windows")
-        {
-            sbConfig.route.auto_detect_interface = true;
-        }
-        else if (platform == "android")
-        {
-            sbConfig.route.auto_detect_interface = null;
-        }
-
-        sbConfig.route.rule_set =
-        [
+        _route.RuleSet.AddRange([
             CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "geosite-category-ads-all"),
             CreateRemoteRuleSet("geosite-category-pt", "geosite", "geosite-category-pt"),
             CreateRemoteRuleSet("geosite-cn", "geosite", "geosite-cn"),
@@ -558,52 +474,121 @@ class Program
             CreateRemoteRuleSet("geosite-microsoft", "geosite", "geosite-microsoft"),
             CreateRemoteRuleSet("geosite-telegram", "geosite", "geosite-telegram"),
             CreateRemoteRuleSet("geoip-telegram", "geoip", "geoip-tg"),
-            CreateRemoteRuleSet("geosite-wikimedia", "geosite", "geosite-wikimedia")
-        ];
+        ]);
 
-        sbConfig.route.rules =
-        [
-            new RouteRule { ip_cidr = ["::/0"], action = "reject" },
-            new RouteRule { inbound = ["tun-in", "mixed-in"], port = [53], action = "hijack-dns" },
-            new RouteRule { network = ["icmp"], action = "route", outbound = "DIRECT" },
-            new RouteRule { ip_is_private = true, action = "route", outbound = "DIRECT" },
-            new RouteRule { inbound = ["tun-in", "mixed-in"], action = "sniff", timeout = "100ms" },
-            new RouteRule { protocol = ["ssh"], action = "route", outbound = "DIRECT" },
-            new RouteRule { port = [3478, 3479, 19302, 19303], network = ["udp"], action = "reject" },
-            new RouteRule { rule_set = ["geosite-category-ads-all"], action = "reject" },
+        _route.Rules.AddRange([
+            new RouteRule { IpCidr = ["::/0"], Action = "reject" },
+            new RouteRule { Inbound = ["tun-in", "mixed-in"], Port = [53], Action = "hijack-dns" },
+            new RouteRule { Network = ["icmp"], Action = "route", Outbound = Constants.Direct },
+            new RouteRule { IpIsPrivate = true, Action = "route", Outbound = Constants.Direct },
+            new RouteRule { IpCidr = ["223.5.5.5/32", "1.1.1.1/32"], Action = "route", Outbound = Constants.Direct },
+            new RouteRule { Port = [3478, 3479, 19302, 19303], Network = ["udp"], Action = "reject" },
+            new RouteRule { Inbound = ["tun-in", "mixed-in"], Port = [443], Network = ["udp"], Action = "reject" },
+            new RouteRule { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
+            new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = Constants.Direct },
+            new RouteRule { RuleSet = ["geosite-category-ads-all"], Action = "reject" },
+            new RouteRule { RuleSet = ["geosite-youtube"], Action = "route", Outbound = "🎬 YouTube" },
+            new RouteRule { RuleSet = ["geosite-spotify"], Action = "route", Outbound = "🎵 Spotify" },
+            new RouteRule { RuleSet = ["geosite-steam"], Action = "route", Outbound = "🎮 Steam" },
+            new RouteRule { RuleSet = ["geosite-category-ai-!cn"], Action = "route", Outbound = "🤖 AI" },
+            new RouteRule { RuleSet = ["geosite-microsoft"], Action = "route", Outbound = "🪟 Microsoft" },
+            new RouteRule { RuleSet = ["geosite-telegram"], Action = "route", Outbound = "✈️ Telegram" },
+            new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = Constants.Direct },
+            new RouteRule { Inbound = ["mixed-in"], Action = "resolve" },
+            new RouteRule { RuleSet = ["geoip-telegram"], Action = "route", Outbound = "✈️ Telegram" },
+            new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = Constants.Direct }
+        ]);
 
-            new RouteRule { rule_set = ["geosite-youtube"], action = "route", outbound = "🎬 YouTube" },
-            new RouteRule { rule_set = ["geosite-spotify"], action = "route", outbound = "🎵 Spotify" },
-            new RouteRule { rule_set = ["geosite-steam"], action = "route", outbound = "🎮 Steam" },
-            new RouteRule { rule_set = ["geosite-category-ai-!cn"], action = "route", outbound = "🤖 AI" },
-            new RouteRule { rule_set = ["geosite-microsoft"], action = "route", outbound = "🪟 Microsoft" },
-            new RouteRule { rule_set = ["geosite-telegram"], action = "route", outbound = "✈️ Telegram" },
-            new RouteRule { rule_set = ["geosite-wikimedia"], action = "route", outbound = "📚 Wikipedia" },
-            new RouteRule { rule_set = ["geosite-cn", "geosite-category-pt"], action = "route", outbound = "DIRECT" },
-
-            new RouteRule { inbound = ["mixed-in"], action = "resolve" },
-
-            new RouteRule { inbound = ["tun-in", "mixed-in"], port = [443], network = ["udp"], action = "reject" },
-            new RouteRule { ip_cidr = ["223.5.5.5/32", "1.1.1.1/32"], action = "route", outbound = "DIRECT" },
-            new RouteRule { rule_set = ["geoip-cn"], action = "route", outbound = "DIRECT" },
-            new RouteRule { rule_set = ["geoip-telegram"], action = "route", outbound = "✈️ Telegram" }
-        ];
+        return this;
     }
 
-    static JsonSerializerOptions CreateJsonOptions() => new()
+    public SingboxConfig Build()
     {
-        WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
+        var orderedOutbounds = new List<Outbound>();
+        orderedOutbounds.AddRange(_mainOutbounds);    // 1. 先是 Proxies 组
+        orderedOutbounds.AddRange(_regionOutbounds);  // 2. 然后是 分地区组
+        orderedOutbounds.AddRange(_serviceOutbounds); // 3. 接着是 各大服务组
+        orderedOutbounds.AddRange(_nodeOutbounds);    // 4. 然后是 各个底层节点
+        if (_directOutbound != null) 
+        {
+            orderedOutbounds.Add(_directOutbound);    // 5. 最后是 DIRECT 直连
+        }
 
-    static SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName) => new()
+        return new SingboxConfig
+        {
+            Log = _log,
+            Dns = _dns,
+            Inbounds = _inbounds,
+            Outbounds = orderedOutbounds, // 传入排序好的集合
+            Route = _route,
+            Experimental = _experimental
+        };
+    }
+
+    private static SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName) => new()
     {
-        tag = tag,
-        type = "remote",
-        format = "binary",
-        url = $"https://fastly.jsdelivr.net/gh/SagerNet/sing-{repoType}@rule-set/{fileName}.srs",
-        download_detour = "DIRECT",
-        update_interval = "1d"
+        Tag = tag, Type = "remote", Format = "binary",
+        Url = $"https://fastly.jsdelivr.net/gh/SagerNet/sing-{repoType}@rule-set/{fileName}.srs",
+        DownloadDetour = Constants.Direct, UpdateInterval = "1d"
     };
+}
+
+class Program
+{
+    private const string InputFile = "1.yaml";
+    private const string OutputFile = "config.json";
+
+    static string GetContentHash(string content)
+    {
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));
+        return Convert.ToHexString(hashBytes)[..8].ToLower();
+    }
+
+    static void Main()
+    {
+        if (!File.Exists(InputFile))
+        {
+            Console.WriteLine($"[ERROR] File not found: {InputFile}");
+            return;
+        }
+
+        // 【修改点 2】加入平台选择提示
+        Console.WriteLine("请选择要生成配置的平台：");
+        Console.WriteLine("1. Windows (默认，包含 clash_api)");
+        Console.WriteLine("2. Android (移除 clash_api)");
+        Console.Write("请输入选项 (1/2): ");
+        string? input = Console.ReadLine();
+        bool isAndroid = input?.Trim() == "2";
+        
+        string yamlContent = File.ReadAllText(InputFile);
+        var clashConfig = ClashParser.Parse(yamlContent);
+        
+        if (clashConfig == null) return;
+
+        string configHashId = GetContentHash(yamlContent);
+
+        // 使用 Builder 模式链式生成配置，传入是否包含 ClashApi 的参数
+        var sbConfig = new SingboxConfigBuilder()
+            .WithExperimental(configHashId, !isAndroid)
+            .WithDefaultInbounds()
+            .WithDirectOutbound()
+            .WithProxyNodes(clashConfig)
+            .WithRegionOutbounds()
+            .WithProxyGroups()
+            .WithDns()
+            .WithRouting()
+            .Build();
+
+        var jsonOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        File.WriteAllText(OutputFile, JsonSerializer.Serialize(sbConfig, jsonOptions));
+        
+        string platformName = isAndroid ? "Android" : "Windows";
+        Console.WriteLine($"[SUCCESS] Built universal preset for {platformName} -> {OutputFile}");
+    }
 }
