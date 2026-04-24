@@ -47,6 +47,8 @@ public record DnsServer
     [JsonPropertyName("type")] public string? Type { get; init; }
     [JsonPropertyName("server")] public string? Server { get; init; }
     [JsonPropertyName("detour")] public string? Detour { get; init; }
+    // 【Linux 专属优化字段】
+    [JsonPropertyName("prefer_go")] public bool? PreferGo { get; init; }
 }
 
 public record DnsRule
@@ -71,6 +73,7 @@ public record Inbound
     [JsonPropertyName("strict_route")] public bool? StrictRoute { get; init; }
     [JsonPropertyName("stack")] public string? Stack { get; init; }
     [JsonPropertyName("mtu")] public int? Mtu { get; init; }
+    [JsonPropertyName("auto_redirect")] public bool? AutoRedirect { get; init; }
 }
 
 public record Outbound
@@ -79,18 +82,15 @@ public record Outbound
     [JsonPropertyName("tag")] public string? Tag { get; init; }
     [JsonPropertyName("server")] public string? Server { get; init; }
     [JsonPropertyName("server_port")] public int? ServerPort { get; init; }
-
     // VLESS 核心字段
     [JsonPropertyName("uuid")] public string? Uuid { get; init; }
     [JsonPropertyName("flow")] public string? Flow { get; init; }
     [JsonPropertyName("packet_encoding")] public string? PacketEncoding { get; init; }
-
     [JsonPropertyName("password")] public string? Password { get; init; }
     [JsonPropertyName("outbounds")] public List<string>? Outbounds { get; init; }
     [JsonPropertyName("default")] public string? Default { get; init; }
     [JsonPropertyName("tls")] public OutboundTls? Tls { get; init; }
     [JsonPropertyName("domain_resolver")] public string? DomainResolver { get; init; }
-    [JsonPropertyName("tcp_fast_open")] public bool? TcpFastOpen { get; init; }
     [JsonPropertyName("connect_timeout")] public string? ConnectTimeout { get; init; }
     [JsonPropertyName("interrupt_exist_connections")] public bool? InterruptExistConnections { get; init; }
 }
@@ -208,6 +208,7 @@ public static class ClashParser
 
 public class SingboxConfigBuilder
 {
+    private readonly string _platform;
     private readonly LogConfig _log = new();
     private readonly DnsConfig _dns = new();
     private readonly List<Inbound> _inbounds = [];
@@ -224,7 +225,11 @@ public class SingboxConfigBuilder
     private readonly List<Outbound> _regionOutbounds = [];
     private readonly List<Outbound> _mainOutbounds = [];
     private readonly List<Outbound> _serviceOutbounds = [];
-
+    // 将平台信息传给构造器
+    public SingboxConfigBuilder(string platform)
+    {
+        _platform = platform;
+    }
     public SingboxConfigBuilder WithExperimental(string configHashId, bool includeClashApi)
     {
         _experimental = new ExperimentalConfig
@@ -232,8 +237,12 @@ public class SingboxConfigBuilder
             CacheFile = new CacheFileConfig { Enabled = true, Path = "cache.db", CacheId = configHashId },
             // 如果不包含 Clash API，则赋值为 null，序列化时会自动忽略该字段
             ClashApi = includeClashApi 
-                ? new ClashApiConfig { ExternalController = "127.0.0.1:9999", ExternalUi = "ui", Secret = "127001" } 
-                : null
+                ? new ClashApiConfig 
+                { 
+                    ExternalController = "127.0.0.1:9090", 
+                    ExternalUi = _platform == "Windows" ? "ui" : "/etc/sing-box/ui",
+                    Secret = "127001" 
+                } : null
         };
         return this;
     }
@@ -246,11 +255,18 @@ public class SingboxConfigBuilder
             Tag = "tun-in", 
             Address = ["172.19.0.1/30", "fd00::1/126"], 
             AutoRoute = true, 
+            AutoRedirect = _platform == "Linux" ? true : null,
             StrictRoute = true, 
             Stack = "system",
-            Mtu = 1350,
+            Mtu = 1480,
         });
-        _inbounds.Add(new Inbound { Type = "mixed", Tag = "mixed-in", Listen = "127.0.0.1", ListenPort = 8848 });
+        _inbounds.Add(new Inbound 
+        { 
+            Type = "mixed", 
+            Tag = "mixed-in", 
+            Listen = "127.0.0.1", 
+            ListenPort = 8848 
+        });
         return this;
     }
 
@@ -303,7 +319,6 @@ public class SingboxConfigBuilder
             Server = server,
             ServerPort = port,
             DomainResolver = "node-resolver",
-            TcpFastOpen = true,
             ConnectTimeout = "5s",
             Password = p.TryGetValue("password", out var pwd) ? pwd.ToString() : "",
             Tls = tlsConfig
@@ -319,11 +334,10 @@ public class SingboxConfigBuilder
             Server = server,
             ServerPort = port,
             DomainResolver = "node-resolver",
-            TcpFastOpen = true,
             ConnectTimeout = "5s",
             Uuid = p.TryGetValue("uuid", out var id) ? id.ToString() : "",
             Flow = p.TryGetValue("flow", out var f) ? f.ToString() : null,
-            PacketEncoding = "xudp", // VLESS 推荐
+            PacketEncoding = "xudp",
             Tls = tlsConfig
         };
     }
@@ -441,7 +455,7 @@ public class SingboxConfigBuilder
     public SingboxConfigBuilder WithDns()
     {
         _dns.Servers.AddRange([
-            new DnsServer { Tag = "bootstrap", Type = "local" },
+            new DnsServer { Tag = "bootstrap", Type = "local", PreferGo = _platform == "Linux" ? true : null },
             new DnsServer { Tag = "node-resolver", Type = "https", Server = "223.5.5.5" },
             new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = Constants.MainProxyGroup },
             new DnsServer { Tag = "local", Type = "https", Server = "223.5.5.5" }
@@ -552,14 +566,19 @@ class Program
             return;
         }
 
-        // 【修改点 2】加入平台选择提示
         Console.WriteLine("请选择要生成配置的平台：");
-        Console.WriteLine("1. Windows (默认，包含 clash_api)");
-        Console.WriteLine("2. Android (移除 clash_api)");
-        Console.Write("请输入选项 (1/2): ");
+        Console.WriteLine("1. Windows");
+        Console.WriteLine("2. Android");
+        Console.WriteLine("3. Linux");
+        Console.Write("请输入选项 (1/2/3): ");
         string? input = Console.ReadLine();
-        bool isAndroid = input?.Trim() == "2";
-        
+        string platform = input?.Trim() switch
+        {
+            "2" => "Android",
+            "3" => "Linux",
+            _ => "Windows"
+        };
+
         string yamlContent = File.ReadAllText(InputFile);
         var clashConfig = ClashParser.Parse(yamlContent);
         
@@ -568,8 +587,8 @@ class Program
         string configHashId = GetContentHash(yamlContent);
 
         // 使用 Builder 模式链式生成配置，传入是否包含 ClashApi 的参数
-        var sbConfig = new SingboxConfigBuilder()
-            .WithExperimental(configHashId, !isAndroid)
+        var sbConfig = new SingboxConfigBuilder(platform)
+            .WithExperimental(configHashId, includeClashApi: platform != "Android") // Android 版本不包含 Clash API 支持
             .WithDefaultInbounds()
             .WithDirectOutbound()
             .WithProxyNodes(clashConfig)
@@ -588,7 +607,7 @@ class Program
 
         File.WriteAllText(OutputFile, JsonSerializer.Serialize(sbConfig, jsonOptions));
         
-        string platformName = isAndroid ? "Android" : "Windows";
+        string platformName = platform;
         Console.WriteLine($"[SUCCESS] Built universal preset for {platformName} -> {OutputFile}");
     }
 }
