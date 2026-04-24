@@ -182,7 +182,6 @@ public static class Constants
         { "🇸🇬 狮城", new Regex(@"(?i)狮城|新加坡|singapore|🇸🇬|(?<![a-zA-Z])sgp?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
         { "🇯🇵 日本", new Regex(@"(?i)日本|japan|tokyo|东京|大阪|🇯🇵|(?<![a-zA-Z])jpn?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
         { "🇺🇸 美国", new Regex(@"(?i)美国|america|洛杉矶|硅谷|🇺🇸|(?<![a-zA-Z])usa?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
-        { "🇹🇼 台湾", new Regex(@"(?i)台湾|taiwan|taipei|台北|🇹🇼|(?<![a-zA-Z])tw\d*(?![a-zA-Z])", RegexOptions.Compiled) }
     };
 }
 
