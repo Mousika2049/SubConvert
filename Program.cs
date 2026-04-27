@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace LinkCubeConvert;
+namespace SubConvert;
 
 public record ClashConfig
 {
