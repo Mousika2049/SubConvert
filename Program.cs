@@ -216,8 +216,6 @@ public class SingboxConfigBuilder(string platform)
     private readonly DnsConfig _dns = new();
     private readonly List<Inbound> _inbounds = [];
     private readonly RouteConfig _route = new();
-    private readonly ExperimentalConfig? _experimental;
-    // 构建过程中的状态变量
     private readonly HashSet<string> _proxyServerDomains = [];
     private readonly List<string> _allNodeNames = [];
     private readonly List<string> _finalRegionGroupNames = [];
@@ -538,7 +536,6 @@ public class SingboxConfigBuilder(string platform)
             Inbounds = _inbounds,
             Outbounds = orderedOutbounds, // 传入排序好的集合
             Route = _route,
-            Experimental = _experimental
         };
     }
 
