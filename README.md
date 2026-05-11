@@ -1,37 +1,39 @@
 # SubConvert
 
-将 Clash YAML（当前默认读取 `1.yaml`）转换为 sing-box `config.json` 的命令行工具。
+将 Clash `proxies` YAML 批量转换为 sing-box `config.json` 的命令行工具，支持单文件本地输出和批量上传 GitHub。
 
-## 功能概览
+## 当前能力
 
-- 解析 `proxies` 节点，生成 sing-box 出站配置（目前支持 `trojan`、`vless`）
-- 按节点名称自动聚合地区分组（香港/狮城/日本/美国）
-- 生成主代理组与常用服务分流组（YouTube、Spotify、Steam、AI、Microsoft、Telegram）
-- 自动写入 DNS、路由规则集（geosite/geoip 远程 rule-set）
-- 根据平台生成差异化配置（Windows / Android / Linux）
+- 从 GitHub 仓库读取 `subconfigs/*.yaml`
+- 仅转换 `trojan`、`vless` 节点（含 TLS / REALITY 字段映射）
+- 自动生成地区分组（香港 / 狮城 / 日本 / 美国）与服务分组（Spotify / Steam / AI / Microsoft / Telegram）
+- 生成 DNS、路由规则与远程 rule-set（MetaCubeX `geosite`/`geoip`）
+- 按平台生成差异配置（Windows / Android / Linux）
 
-## 输入与输出
+## 运行环境
 
-- **输入文件**：`1.yaml`（项目根目录）
-- **输出文件**：`config.json`（项目根目录）
+- .NET SDK `10.0`
+- NuGet 依赖：`YamlDotNet`
 
-## 使用方式
-
-1. 准备好 `1.yaml`（包含 Clash 格式 `proxies` 字段）。
-2. 运行：
+## 运行方式
 
 ```bash
 dotnet run
 ```
 
-3. 按提示选择目标平台：
-   - `1` Windows
-   - `2` Android
-   - `3` Linux
+运行后会交互式选择：
 
-生成成功后会在根目录输出 `config.json`。
+1. 目标平台（Windows / Android / Linux）
+2. 机场配置（单个或全部）
 
-## 说明
+## 输入与输出
 
-- Android 配置默认不包含 Clash API 字段。
-- 若找不到 `1.yaml` 或 YAML 解析失败，程序会直接输出错误并结束。
+- **输入来源**：`{owner}/SubConfigHub/subconfigs/*.yaml`
+- **单机场模式输出**：项目根目录 `config.json`
+- **批量模式输出**：上传到 `{owner}/SubConfigHub/singboxConfigs/{机场名}/{平台}/config.json`
+
+## 配置说明
+
+- Android 平台不会写入 `experimental.clash_api`。
+- Windows 的 `external_ui` 为 `ui`，Linux 为 `/etc/sing-box/ui`。
+- 当前 `Program.cs` 默认写死了 `owner/token`；如需改为环境变量输入，可启用 `RequireInput("GITHUB_OWNER")` 与 `RequireInput("GITHUB_TOKEN")` 相关代码。
