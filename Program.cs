@@ -38,7 +38,7 @@ public record DnsConfig
     [JsonPropertyName("servers")] public List<DnsServer> Servers { get; init; } = [];
     [JsonPropertyName("rules")] public List<DnsRule> Rules { get; init; } = [];
     [JsonPropertyName("final")] public string? Final { get; init; } = "remote";
-    [JsonPropertyName("strategy")] public string? Strategy { get; init; } = "ipv4_only";
+    [JsonPropertyName("strategy")] public string? Strategy { get; init; } = "prefer_ipv4";
     [JsonPropertyName("reverse_mapping")] public bool? ReverseMapping { get; init; } = true;
 }
 
@@ -48,8 +48,6 @@ public record DnsServer
     [JsonPropertyName("type")] public string? Type { get; init; }
     [JsonPropertyName("server")] public string? Server { get; init; }
     [JsonPropertyName("detour")] public string? Detour { get; init; }
-    // 【Linux 专属优化字段】
-    [JsonPropertyName("prefer_go")] public bool? PreferGo { get; init; }
 }
 
 public record DnsRule
@@ -110,10 +108,9 @@ public record OutboundTls
     [JsonPropertyName("utls")] public Utls? Utls { get; init; }
     [JsonPropertyName("alpn")] public List<string>? Alpn { get; init; }
     [JsonPropertyName("min_version")] public string? MinVersion { get; init; }
-    // REALITY 支持
     [JsonPropertyName("reality")] public OutboundReality? Reality { get; init; }
 }
-// REALITY 配置模型
+
 public record OutboundReality
 {
     [JsonPropertyName("enabled")] public bool Enabled { get; init; }
@@ -240,10 +237,10 @@ public class SingboxConfigBuilder(string platform)
             {
                 "Windows" => "mixed",
                 "Linux" => "system",
-                "Android" => "gvisor",
+                "Android" => "system",
                 _ => null
             },
-            Mtu = 1480,
+            Mtu = 1400
         });
         _inbounds.Add(new Inbound
         {
@@ -290,7 +287,7 @@ public class SingboxConfigBuilder(string platform)
             {
                 "trojan" => BuildTrojanOutbound(p, name, server, port, tlsConfig),
                 "vless" => BuildVlessOutbound(p, name, server, port, tlsConfig),
-                _ => null // 兜底安全策略
+                _ => null
             };
 
             if (outbound != null)
@@ -422,7 +419,7 @@ public class SingboxConfigBuilder(string platform)
 
         var specialGroups = new Dictionary<string, string>
         {
-            { "🎵 Spotify", Constants.MainProxyGroup },
+            { "🎵 Spotify", usGroup },
             { "🎮 Steam", hkGroup },
             { "🤖 AI", usGroup },
             { "🪟 Microsoft", hkGroup },
@@ -444,8 +441,8 @@ public class SingboxConfigBuilder(string platform)
     public SingboxConfigBuilder WithDns()
     {
         _dns.Servers.AddRange([
-            new DnsServer { Tag = "bootstrap", Type = "local", PreferGo = _platform == "Linux" ? true : null },
-            new DnsServer { Tag = "node-resolver", Type = "udp", Server = "223.5.5.5" },
+            new DnsServer { Tag = "bootstrap", Type = "local" },
+            new DnsServer { Tag = "node-resolver", Type = "https", Server = "223.5.5.5" },
             new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = Constants.MainProxyGroup },
             new DnsServer { Tag = "local", Type = "https", Server = "223.5.5.5" }
         ]);
@@ -590,13 +587,12 @@ public class GitHubService(string token, string owner, string repo)
         string json = await resp.Content.ReadAsStringAsync();
         var items = JsonSerializer.Deserialize<List<GitHubContentItem>>(json) ?? [];
 
-        return items
+        return [.. items
             .Where(i => i.Type == "file" &&
                         i.Name.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
             .Select(i => (
                 DisplayName: Path.GetFileNameWithoutExtension(i.Name),
-                RepoPath: i.Path))
-            .ToList();
+                RepoPath: i.Path))];
     }
 
     /// <summary>下载指定路径的文件内容，返回 UTF-8 字符串。</summary>
