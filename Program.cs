@@ -13,8 +13,7 @@ namespace SubConvert;
 
 public record ClashConfig
 {
-    [YamlMember(Alias = "proxies")]
-    public List<Dictionary<string, object>> Proxies { get; init; } = [];
+    [YamlMember(Alias = "proxies")] public List<Dictionary<string, object>> Proxies { get; init; } = [];
 }
 
 public record SingboxConfig
