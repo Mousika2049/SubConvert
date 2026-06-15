@@ -654,7 +654,7 @@ class Program
 {
     // 仓库结构常量，按需修改
     private const string Repo = "SubConfigHub";
-    private const string SubconfigsFolder = "subconfigs";
+    private const string SubconfigsFolder = "clashConfigs";
     private const string OutputBaseFolder = "singboxConfigs";
     private const string LocalOutputFile = "config.json";
 
