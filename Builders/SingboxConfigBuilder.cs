@@ -1,0 +1,348 @@
+using System.Net;
+using SubConvert.Constants;
+using SubConvert.Models.Clash;
+using SubConvert.Models.Singbox;
+
+namespace SubConvert.Builders;
+
+public class SingboxConfigBuilder(string platform)
+{
+    private readonly string _platform = platform;
+    private readonly LogConfig _log = new();
+    private readonly DnsConfig _dns = new();
+    private readonly List<Inbound> _inbounds = [];
+    private readonly RouteConfig _route = new();
+    private readonly HashSet<string> _proxyServerDomains = [];
+    private readonly List<string> _allNodeNames = [];
+    private readonly List<string> _finalRegionGroupNames = [];
+    
+    private Outbound? _directOutbound;
+    private readonly List<Outbound> _nodeOutbounds = [];
+    private readonly List<Outbound> _regionOutbounds = [];
+    private readonly List<Outbound> _mainOutbounds = [];
+    private readonly List<Outbound> _serviceOutbounds = [];
+
+    public SingboxConfigBuilder WithDefaultInbounds()
+    {
+        _inbounds.Add(new Inbound
+        {
+            Type = "tun",
+            Tag = "tun-in",
+            Address = ["172.19.0.1/30", "fd00::1/126"],
+            AutoRoute = true,
+            AutoRedirect = _platform == "Linux" ? true : null,
+            StrictRoute = true,
+            Stack = _platform switch
+            {
+                "Windows" => "mixed",
+                "Linux" => "system",
+                "Android" => "system",
+                _ => null
+            },
+            Mtu = 1400
+        });
+        _inbounds.Add(new Inbound
+        {
+            Type = "mixed",
+            Tag = "mixed-in",
+            Listen = "127.0.0.1",
+            ListenPort = 8848
+        });
+        return this;
+    }
+
+    public SingboxConfigBuilder WithDirectOutbound()
+    {
+        _directOutbound = new Outbound
+        {
+            Type = "direct",
+            Tag = AppConstants.Direct,
+            DomainResolver = "local"
+        };
+        return this;
+    }
+
+    public SingboxConfigBuilder WithProxyNodes(ClashConfig clashConfig)
+    {
+        if (clashConfig.Proxies == null) return this;
+
+        foreach (var p in clashConfig.Proxies)
+        {
+            if (!p.TryGetValue("type", out var typeObj)) continue;
+            string type = typeObj.ToString()!;
+
+            if (type != "trojan" && type != "vless") continue;
+
+            string name = p["name"].ToString()!;
+            string server = p["server"].ToString()!;
+            int port = int.Parse(p["port"].ToString()!);
+
+            _allNodeNames.Add(name);
+            if (!IPAddress.TryParse(server, out _)) _proxyServerDomains.Add(server);
+
+            OutboundTls? tlsConfig = ExtractTlsConfig(p, type, server);
+
+            Outbound? outbound = type switch
+            {
+                "trojan" => BuildTrojanOutbound(p, name, server, port, tlsConfig),
+                "vless" => BuildVlessOutbound(p, name, server, port, tlsConfig),
+                _ => null
+            };
+
+            if (outbound != null)
+            {
+                _nodeOutbounds.Add(outbound);
+            }
+        }
+        return this;
+    }
+    private Outbound BuildTrojanOutbound(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
+    {
+        return new Outbound
+        {
+            Type = "trojan",
+            Tag = name,
+            Server = server,
+            ServerPort = port,
+            DomainResolver = "node-resolver",
+            ConnectTimeout = "5s",
+            Password = p.TryGetValue("password", out var pwd) ? pwd.ToString() : "",
+            Tls = tlsConfig
+        };
+    }
+
+    private Outbound BuildVlessOutbound(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
+    {
+        return new Outbound
+        {
+            Type = "vless",
+            Tag = name,
+            Server = server,
+            ServerPort = port,
+            DomainResolver = "node-resolver",
+            ConnectTimeout = "5s",
+            Uuid = p.TryGetValue("uuid", out var id) ? id.ToString() : "",
+            Flow = p.TryGetValue("flow", out var f) ? f.ToString() : null,
+            PacketEncoding = "xudp",
+            Tls = tlsConfig
+        };
+    }
+
+    private OutboundTls? ExtractTlsConfig(Dictionary<string, object> p, string type, string server)
+    {
+        bool isTls = p.TryGetValue("tls", out var tlsObj) && bool.TryParse(tlsObj.ToString(), out var b) && b;
+        bool isReality = p.ContainsKey("reality-opts");
+
+        // 如果既没标 tls，也不是 reality，且不是天生走 tls 的 trojan，则返回 null
+        if (type != "trojan" && !isTls && !isReality) return null;
+
+        // 提取 Reality 专属
+        OutboundReality? realityConfig = null;
+        if (isReality && p["reality-opts"] is Dictionary<object, object> realityOpts)
+        {
+            realityConfig = new OutboundReality
+            {
+                Enabled = true,
+                PublicKey = realityOpts.TryGetValue("public-key", out var pk) ? pk.ToString() : null,
+                ShortId = realityOpts.TryGetValue("short-id", out var sid) ? sid.ToString() : null
+            };
+        }
+
+        // 提取指纹
+        string fp = p.TryGetValue("client-fingerprint", out var fpObj) ? fpObj.ToString()! : "firefox";
+
+        // 优雅处理 sni、servername 与 fallback 逻辑，杜绝空指针异常
+        string serverName = server; // 默认 fallback 到 server
+        if (p.TryGetValue("sni", out var sniObj))
+            serverName = sniObj.ToString()!;
+        else if (p.TryGetValue("servername", out var snObj))
+            serverName = snObj.ToString()!;
+
+        return new OutboundTls
+        {
+            Enabled = true,
+            ServerName = serverName,
+            Insecure = p.TryGetValue("skip-cert-verify", out var skipCert) && bool.TryParse(skipCert.ToString(), out var insec) ? insec : null,
+            Utls = new Utls { Enabled = true, Fingerprint = fp },
+            Alpn = ["h2", "http/1.1"],
+            MinVersion = "1.3",
+            Reality = realityConfig
+        };
+    }
+
+    public SingboxConfigBuilder WithRegionOutbounds()
+    {
+        foreach (var region in AppConstants.RegionRegexes)
+        {
+            string groupName = region.Key;
+            var matchedNodes = _allNodeNames.Where(name => region.Value.IsMatch(name)).ToList();
+
+            if (matchedNodes.Count >= 2)
+            {
+                _finalRegionGroupNames.Add(groupName);
+                _regionOutbounds.Add(new Outbound
+                {
+                    Type = "selector",
+                    Tag = groupName,
+                    Outbounds = matchedNodes,
+                    Default = matchedNodes.FirstOrDefault(),
+                    InterruptExistConnections = true
+                });
+            }
+        }
+        return this;
+    }
+
+    public SingboxConfigBuilder WithProxyGroups()
+    {
+        var mainGroupOptions = new List<string>(_finalRegionGroupNames);
+        mainGroupOptions.AddRange(_allNodeNames);
+        mainGroupOptions.Add(AppConstants.Direct);
+
+        _mainOutbounds.Add(new Outbound
+        {
+            Type = "selector",
+            Tag = AppConstants.MainProxyGroup,
+            Outbounds = mainGroupOptions,
+            Default = _finalRegionGroupNames.FirstOrDefault() ?? _allNodeNames.FirstOrDefault() ?? AppConstants.Direct,
+            InterruptExistConnections = true
+        });
+
+        var serviceGroupOptions = new List<string> { AppConstants.MainProxyGroup };
+        serviceGroupOptions.AddRange(_finalRegionGroupNames);
+        serviceGroupOptions.AddRange(_allNodeNames);
+        serviceGroupOptions.Add(AppConstants.Direct);
+
+        string usGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? AppConstants.MainProxyGroup;
+        string sgGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇸🇬")) ?? AppConstants.MainProxyGroup;
+        string hkGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? AppConstants.MainProxyGroup;
+
+        var specialGroups = new Dictionary<string, string>
+        {
+            { "🎵 Spotify", usGroup },
+            { "🎮 Steam", hkGroup },
+            { "🤖 AI", usGroup },
+            { "🪟 Microsoft", hkGroup },
+            { "✈️ Telegram", AppConstants.MainProxyGroup },
+        };
+
+        _serviceOutbounds.AddRange(specialGroups.Select(group => new Outbound
+        {
+            Type = "selector",
+            Tag = group.Key,
+            Outbounds = serviceGroupOptions,
+            Default = group.Value,
+            InterruptExistConnections = true
+        }));
+
+        return this;
+    }
+
+    public SingboxConfigBuilder WithDns()
+    {
+        _dns.Servers.AddRange([
+            new DnsServer { Tag = "bootstrap", Type = "local" },
+            new DnsServer { Tag = "node-resolver", Type = "https", Server = "223.5.5.5" },
+            new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = AppConstants.MainProxyGroup },
+            new DnsServer { Tag = "local", Type = "https", Server = "223.5.5.5" }
+        ]);
+
+        _dns.Rules.Add(new DnsRule { QueryType = ["AAAA"], Action = "predefined", Rcode = "NOERROR" });
+        _dns.Rules.Add(new DnsRule { RuleSet = ["geosite-category-ads-all"], Action = "predefined", Rcode = "NOERROR" });
+
+        if (_proxyServerDomains.Count > 0)
+        {
+            _dns.Rules.Add(new DnsRule { Domain = [.. _proxyServerDomains], Action = "route", Server = "node-resolver" });
+        }
+
+        _dns.Rules.Add(new DnsRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Server = "local" });
+
+        return this;
+    }
+
+    public SingboxConfigBuilder WithRouting()
+    {
+        _route.RuleSet.AddRange([
+            CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "category-ads-all"),
+            CreateRemoteRuleSet("geosite-category-pt", "geosite", "category-pt"),
+            CreateRemoteRuleSet("geosite-cn", "geosite", "cn"),
+            CreateRemoteRuleSet("geoip-cn", "geoip", "cn"),
+            CreateRemoteRuleSet("geosite-spotify", "geosite", "spotify"),
+            CreateRemoteRuleSet("geosite-steam", "geosite", "steam"),
+            CreateRemoteRuleSet("geosite-category-ai-!cn", "geosite", "category-ai-!cn"),
+            CreateRemoteRuleSet("geosite-microsoft", "geosite", "microsoft"),
+            CreateRemoteRuleSet("geosite-telegram", "geosite", "telegram"),
+            CreateRemoteRuleSet("geoip-telegram", "geoip", "telegram"),
+        ]);
+
+        _route.Rules.AddRange([
+            new RouteRule
+            {
+                Type = "logical",
+                Mode = "and",
+                Rules =
+                [
+                    new RouteRule { Inbound = ["tun-in", "mixed-in"] },
+                    new RouteRule
+                    {
+                        Type = "logical",
+                        Mode = "or",
+                        Rules = [ new RouteRule { Protocol = ["dns"] }, new RouteRule { Port = [53] } ]
+                    }
+                ],
+                Action = "hijack-dns"
+            },
+            new RouteRule { IpIsPrivate = true, Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { IpCidr = ["::/0"], Action = "reject" },
+            new RouteRule { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { Port = [3478, 3479, 19302, 19303], Network = ["udp"], Action = "reject" },
+            new RouteRule { Inbound = ["tun-in", "mixed-in"], Port = [443], Network = ["udp"], Action = "reject" },
+            new RouteRule { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
+            new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { RuleSet = ["geosite-category-ads-all"], Action = "reject" },
+            new RouteRule { RuleSet = ["geosite-spotify"], Action = "route", Outbound = "🎵 Spotify" },
+            new RouteRule { RuleSet = ["geosite-steam"], Action = "route", Outbound = "🎮 Steam" },
+            new RouteRule { RuleSet = ["geosite-category-ai-!cn"], Action = "route", Outbound = "🤖 AI" },
+            new RouteRule { RuleSet = ["geosite-microsoft"], Action = "route", Outbound = "🪟 Microsoft" },
+            new RouteRule { RuleSet = ["geosite-telegram"], Action = "route", Outbound = "✈️ Telegram" },
+            new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { Inbound = ["mixed-in"], Action = "resolve" },
+            new RouteRule { RuleSet = ["geoip-telegram"], Action = "route", Outbound = "✈️ Telegram" },
+            new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = AppConstants.Direct }
+        ]);
+
+        return this;
+    }
+
+    public SingboxConfig Build()
+    {
+        var orderedOutbounds = new List<Outbound>();
+        orderedOutbounds.AddRange(_mainOutbounds);    // 1. 先是 Proxies 组
+        orderedOutbounds.AddRange(_regionOutbounds);  // 2. 然后是 分地区组
+        orderedOutbounds.AddRange(_serviceOutbounds); // 3. 接着是 各大服务组
+        orderedOutbounds.AddRange(_nodeOutbounds);    // 4. 然后是 各个底层节点
+        if (_directOutbound != null)
+        {
+            orderedOutbounds.Add(_directOutbound);    // 5. 最后是 DIRECT 直连
+        }
+
+        return new SingboxConfig
+        {
+            Log = _log,
+            Dns = _dns,
+            Inbounds = _inbounds,
+            Outbounds = orderedOutbounds, // 传入排序好的集合
+            Route = _route,
+        };
+    }
+
+    private static SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName) => new()
+    {
+        Tag = tag,
+        Type = "remote",
+        Format = "binary",
+        Url = $"https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/{repoType}/{fileName}.srs",
+        DownloadDetour = AppConstants.Direct,
+        UpdateInterval = "1d"
+    };
+}
