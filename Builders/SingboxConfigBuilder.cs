@@ -1,13 +1,22 @@
 using System.Net;
-using SubConvert.Constants;
+using SubConvert.Configuration;
 using SubConvert.Models.Clash;
 using SubConvert.Models.Singbox;
+using SubConvert.Converters;
 
 namespace SubConvert.Builders;
 
-public class SingboxConfigBuilder(string platform)
+public enum TargetPlatform
 {
-    private readonly string _platform = platform;
+    Windows,
+    Android,
+    Linux
+}
+
+public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyConverter> converters)
+{
+    private readonly TargetPlatform _platform = platform;
+    private readonly IEnumerable<IProxyConverter> _converters = converters;
     private readonly LogConfig _log = new();
     private readonly DnsConfig _dns = new();
     private readonly List<Inbound> _inbounds = [];
@@ -30,13 +39,13 @@ public class SingboxConfigBuilder(string platform)
             Tag = "tun-in",
             Address = ["172.19.0.1/30", "fd00::1/126"],
             AutoRoute = true,
-            AutoRedirect = _platform == "Linux" ? true : null,
+            AutoRedirect = _platform == TargetPlatform.Linux ? true : null,
             StrictRoute = true,
             Stack = _platform switch
             {
-                "Windows" => "mixed",
-                "Linux" => "system",
-                "Android" => "system",
+                TargetPlatform.Windows => "mixed",
+                TargetPlatform.Linux => "system",
+                TargetPlatform.Android => "system",
                 _ => null
             },
             Mtu = 1400
@@ -56,7 +65,7 @@ public class SingboxConfigBuilder(string platform)
         _directOutbound = new Outbound
         {
             Type = "direct",
-            Tag = AppConstants.Direct,
+            Tag = AppSettings.Direct,
             DomainResolver = "local"
         };
         return this;
@@ -71,7 +80,9 @@ public class SingboxConfigBuilder(string platform)
             if (!p.TryGetValue("type", out var typeObj)) continue;
             string type = typeObj.ToString()!;
 
-            if (type != "trojan" && type != "vless") continue;
+            // 核心变动：动态查找匹配的 Converter，告别 switch
+            var converter = _converters.FirstOrDefault(c => c.CanHandle(type));
+            if (converter == null) continue;
 
             string name = p["name"].ToString()!;
             string server = p["server"].ToString()!;
@@ -80,52 +91,12 @@ public class SingboxConfigBuilder(string platform)
             _allNodeNames.Add(name);
             if (!IPAddress.TryParse(server, out _)) _proxyServerDomains.Add(server);
 
+            // 提取公共的 TLS 配置逻辑依然保留在 Builder 中
             OutboundTls? tlsConfig = ExtractTlsConfig(p, type, server);
 
-            Outbound? outbound = type switch
-            {
-                "trojan" => BuildTrojanOutbound(p, name, server, port, tlsConfig),
-                "vless" => BuildVlessOutbound(p, name, server, port, tlsConfig),
-                _ => null
-            };
-
-            if (outbound != null)
-            {
-                _nodeOutbounds.Add(outbound);
-            }
+            _nodeOutbounds.Add(converter.Convert(p, name, server, port, tlsConfig));
         }
         return this;
-    }
-    private Outbound BuildTrojanOutbound(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
-    {
-        return new Outbound
-        {
-            Type = "trojan",
-            Tag = name,
-            Server = server,
-            ServerPort = port,
-            DomainResolver = "node-resolver",
-            ConnectTimeout = "5s",
-            Password = p.TryGetValue("password", out var pwd) ? pwd.ToString() : "",
-            Tls = tlsConfig
-        };
-    }
-
-    private Outbound BuildVlessOutbound(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
-    {
-        return new Outbound
-        {
-            Type = "vless",
-            Tag = name,
-            Server = server,
-            ServerPort = port,
-            DomainResolver = "node-resolver",
-            ConnectTimeout = "5s",
-            Uuid = p.TryGetValue("uuid", out var id) ? id.ToString() : "",
-            Flow = p.TryGetValue("flow", out var f) ? f.ToString() : null,
-            PacketEncoding = "xudp",
-            Tls = tlsConfig
-        };
     }
 
     private OutboundTls? ExtractTlsConfig(Dictionary<string, object> p, string type, string server)
@@ -172,7 +143,7 @@ public class SingboxConfigBuilder(string platform)
 
     public SingboxConfigBuilder WithRegionOutbounds()
     {
-        foreach (var region in AppConstants.RegionRegexes)
+        foreach (var region in ProfileDefinitions.RegionRegexes)
         {
             string groupName = region.Key;
             var matchedNodes = _allNodeNames.Where(name => region.Value.IsMatch(name)).ToList();
@@ -197,34 +168,27 @@ public class SingboxConfigBuilder(string platform)
     {
         var mainGroupOptions = new List<string>(_finalRegionGroupNames);
         mainGroupOptions.AddRange(_allNodeNames);
-        mainGroupOptions.Add(AppConstants.Direct);
+        mainGroupOptions.Add(AppSettings.Direct);
 
         _mainOutbounds.Add(new Outbound
         {
             Type = "selector",
-            Tag = AppConstants.MainProxyGroup,
+            Tag = AppSettings.MainProxyGroup,
             Outbounds = mainGroupOptions,
-            Default = _finalRegionGroupNames.FirstOrDefault() ?? _allNodeNames.FirstOrDefault() ?? AppConstants.Direct,
+            Default = _finalRegionGroupNames.FirstOrDefault() ?? _allNodeNames.FirstOrDefault() ?? AppSettings.Direct,
             InterruptExistConnections = true
         });
 
-        var serviceGroupOptions = new List<string> { AppConstants.MainProxyGroup };
+        var serviceGroupOptions = new List<string> { AppSettings.MainProxyGroup };
         serviceGroupOptions.AddRange(_finalRegionGroupNames);
         serviceGroupOptions.AddRange(_allNodeNames);
-        serviceGroupOptions.Add(AppConstants.Direct);
+        serviceGroupOptions.Add(AppSettings.Direct);
 
-        string usGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? AppConstants.MainProxyGroup;
-        string sgGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇸🇬")) ?? AppConstants.MainProxyGroup;
-        string hkGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? AppConstants.MainProxyGroup;
+        string usGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? AppSettings.MainProxyGroup;
+        string sgGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇸🇬")) ?? AppSettings.MainProxyGroup;
+        string hkGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? AppSettings.MainProxyGroup;
 
-        var specialGroups = new Dictionary<string, string>
-        {
-            { "🎵 Spotify", usGroup },
-            { "🎮 Steam", hkGroup },
-            { "🤖 AI", usGroup },
-            { "🪟 Microsoft", hkGroup },
-            { "✈️ Telegram", AppConstants.MainProxyGroup },
-        };
+        var specialGroups = ProfileDefinitions.GetServiceGroupMappings(usGroup, hkGroup, AppSettings.MainProxyGroup);
 
         _serviceOutbounds.AddRange(specialGroups.Select(group => new Outbound
         {
@@ -243,7 +207,7 @@ public class SingboxConfigBuilder(string platform)
         _dns.Servers.AddRange([
             new DnsServer { Tag = "bootstrap", Type = "local" },
             new DnsServer { Tag = "node-resolver", Type = "https", Server = "223.5.5.5" },
-            new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = AppConstants.MainProxyGroup },
+            new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = AppSettings.MainProxyGroup },
             new DnsServer { Tag = "local", Type = "https", Server = "223.5.5.5" }
         ]);
 
@@ -292,23 +256,23 @@ public class SingboxConfigBuilder(string platform)
                 ],
                 Action = "hijack-dns"
             },
-            new RouteRule { IpIsPrivate = true, Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { IpIsPrivate = true, Action = "route", Outbound = AppSettings.Direct },
             new RouteRule { IpCidr = ["::/0"], Action = "reject" },
-            new RouteRule { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = AppSettings.Direct },
             new RouteRule { Port = [3478, 3479, 19302, 19303], Network = ["udp"], Action = "reject" },
             new RouteRule { Inbound = ["tun-in", "mixed-in"], Port = [443], Network = ["udp"], Action = "reject" },
             new RouteRule { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
-            new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = AppSettings.Direct },
             new RouteRule { RuleSet = ["geosite-category-ads-all"], Action = "reject" },
             new RouteRule { RuleSet = ["geosite-spotify"], Action = "route", Outbound = "🎵 Spotify" },
             new RouteRule { RuleSet = ["geosite-steam"], Action = "route", Outbound = "🎮 Steam" },
             new RouteRule { RuleSet = ["geosite-category-ai-!cn"], Action = "route", Outbound = "🤖 AI" },
             new RouteRule { RuleSet = ["geosite-microsoft"], Action = "route", Outbound = "🪟 Microsoft" },
             new RouteRule { RuleSet = ["geosite-telegram"], Action = "route", Outbound = "✈️ Telegram" },
-            new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = AppConstants.Direct },
+            new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = AppSettings.Direct },
             new RouteRule { Inbound = ["mixed-in"], Action = "resolve" },
             new RouteRule { RuleSet = ["geoip-telegram"], Action = "route", Outbound = "✈️ Telegram" },
-            new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = AppConstants.Direct }
+            new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = AppSettings.Direct }
         ]);
 
         return this;
@@ -342,7 +306,7 @@ public class SingboxConfigBuilder(string platform)
         Type = "remote",
         Format = "binary",
         Url = $"https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/{repoType}/{fileName}.srs",
-        DownloadDetour = AppConstants.Direct,
+        DownloadDetour = AppSettings.Direct,
         UpdateInterval = "1d"
     };
 }

@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using SubConvert.Constants;
+using SubConvert.Configuration;
 
 namespace SubConvert.Models.Singbox;
 
@@ -7,7 +7,7 @@ public record RouteConfig
 {
     [JsonPropertyName("rule_set")] public List<SingboxRuleSet> RuleSet { get; init; } = [];
     [JsonPropertyName("rules")] public List<RouteRule> Rules { get; init; } = [];
-    [JsonPropertyName("final")] public string? Final { get; init; } = AppConstants.MainProxyGroup;
+    [JsonPropertyName("final")] public string? Final { get; init; } = AppSettings.MainProxyGroup;
     [JsonPropertyName("auto_detect_interface")] public bool? AutoDetectInterface { get; init; } = true;
 }
 

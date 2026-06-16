@@ -1,12 +1,10 @@
 using System.Text.RegularExpressions;
 
-namespace SubConvert.Constants;
+namespace SubConvert.Configuration;
 
-public static class AppConstants
+public static class ProfileDefinitions
 {
-    public const string MainProxyGroup = "🚀 PROXIES";
-    public const string Direct = "DIRECT";
-
+    // 区域节点正则匹配规则
     public static readonly Dictionary<string, Regex> RegionRegexes = new()
     {
         { "🇭🇰 香港", new Regex(@"(?i)香港|hong\s?kong|深港|🇭🇰|(?<![a-zA-Z])hkg?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
@@ -14,4 +12,17 @@ public static class AppConstants
         { "🇯🇵 日本", new Regex(@"(?i)日本|japan|tokyo|东京|大阪|🇯🇵|(?<![a-zA-Z])jpn?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
         { "🇺🇸 美国", new Regex(@"(?i)美国|america|洛杉矶|硅谷|🇺🇸|(?<![a-zA-Z])usa?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
     };
+
+    // 服务组默认路由策略映射
+    public static Dictionary<string, string> GetServiceGroupMappings(string usGroup, string hkGroup, string mainGroup)
+    {
+        return new Dictionary<string, string>
+        {
+            { "🎵 Spotify", usGroup },
+            { "🎮 Steam", hkGroup },
+            { "🤖 AI", usGroup },
+            { "🪟 Microsoft", hkGroup },
+            { "✈️ Telegram", mainGroup },
+        };
+    }
 }

@@ -7,17 +7,14 @@ using SubConvert.Builders;
 using SubConvert.Models.Singbox;
 using SubConvert.Parsers;
 using SubConvert.Services;
+using SubConvert.Converters;
+using SubConvert.Configuration;
 
 namespace SubConvert.App;
 
 public static class ConversionOrchestrator
 {
-    // 仓库结构常量
-    private const string Repo = "SubConfigHub";
-    private const string SubconfigsFolder = "clashConfigs";
-    private const string OutputBaseFolder = "singboxConfigs";
-    private const string LocalOutputFile = "config.json";
-
+    
     // ── 辅助方法 ──────────────────────────────────────────────────────────────
 
     private static string GetContentHash(string content)
@@ -27,12 +24,20 @@ public static class ConversionOrchestrator
     }
 
     /// <summary>将 YAML 字符串转换为 SingboxConfig 对象。</summary>
-    private static SingboxConfig ConvertYaml(string yamlContent, string platform)
+    private static SingboxConfig ConvertYaml(string yamlContent, TargetPlatform platform)
     {
         var clashConfig = ClashParser.Parse(yamlContent)
             ?? throw new InvalidOperationException("YAML 解析失败，请检查文件内容。");
 
-        var config = new SingboxConfigBuilder(platform)
+        // 注册可用的转换策略
+        var converters = new List<IProxyConverter>
+        {
+            new TrojanConverter(),
+            new VlessConverter()
+        };
+
+        // 将转换策略注入到 Builder 中
+        var config = new SingboxConfigBuilder(platform, converters)
             .WithDefaultInbounds()
             .WithDirectOutbound()
             .WithProxyNodes(clashConfig)
@@ -55,11 +60,11 @@ public static class ConversionOrchestrator
                     Path = "cache.db",
                     CacheId = hashId
                 },
-                ClashApi = platform != "Android"
+                ClashApi = platform != TargetPlatform.Android
                     ? new ClashApiConfig
                     {
                         ExternalController = "127.0.0.1:9090",
-                        ExternalUi = platform == "Windows" ? "ui" : "/etc/sing-box/ui",
+                        ExternalUi = platform == TargetPlatform.Windows ? "ui" : "/etc/sing-box/ui",
                         Secret = "127001"
                     }
                     : null
@@ -113,11 +118,9 @@ public static class ConversionOrchestrator
 
     public static async Task RunAsync()
     {
-        // 1. 获取认证信息
-        //string owner = RequireInput("GITHUB_OWNER", "请输入 GitHub 用户名 (仓库所有者): ");
-        //string token = RequireInput("GITHUB_TOKEN", "请输入 GitHub Personal Access Token: ", secret: true);
-        string owner = "Mousika2049";
-        string token = "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";
+        // 1. 获取认证信息 (直接读取 AppSettings)
+        string owner = AppSettings.DefaultGitHubOwner;
+        string token = AppSettings.DefaultGitHubToken;
 
         if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(token))
         {
@@ -125,15 +128,15 @@ public static class ConversionOrchestrator
             return;
         }
 
-        var github = new GitHubService(token, owner, Repo);
+        var github = new GitHubService(token, owner, AppSettings.RepoName);
 
         // 2. 获取仓库内 YAML 文件列表
-        Console.WriteLine($"\n[INFO] 正在获取 {owner}/{Repo}/{SubconfigsFolder} 文件列表...");
+        Console.WriteLine($"\n[INFO] 正在获取 {owner}/{AppSettings.RepoName}/{AppSettings.SubconfigsFolder} 文件列表...");
         List<(string DisplayName, string RepoPath)> files;
         try
         {
-            files = await github.ListYamlFilesAsync(SubconfigsFolder);
-        }
+            files = await github.ListYamlFilesAsync(AppSettings.SubconfigsFolder);
+        }        
         catch (Exception ex)
         {
             Console.WriteLine($"[ERROR] 获取文件列表失败：{ex.Message}");
@@ -142,7 +145,7 @@ public static class ConversionOrchestrator
 
         if (files.Count == 0)
         {
-            Console.WriteLine($"[ERROR] {SubconfigsFolder}/ 文件夹内未找到任何 YAML 文件。");
+            Console.WriteLine($"[ERROR] {AppSettings.SubconfigsFolder}/ 文件夹内未找到任何 YAML 文件。");
             return;
         }
 
@@ -152,11 +155,11 @@ public static class ConversionOrchestrator
         Console.WriteLine("2. Android");
         Console.WriteLine("3. Linux");
         Console.Write("请输入选项 (1/2/3): ");
-        string platform = Console.ReadLine()?.Trim() switch
+        TargetPlatform platform = Console.ReadLine()?.Trim() switch
         {
-            "2" => "Android",
-            "3" => "Linux",
-            _ => "Windows"
+            "2" => TargetPlatform.Android,
+            "3" => TargetPlatform.Linux,
+            _ => TargetPlatform.Windows
         };
         Console.WriteLine($"[INFO] 目标平台：{platform}");
 
@@ -193,12 +196,12 @@ public static class ConversionOrchestrator
                     SingboxConfig config = ConvertYaml(yamlContent, platform);
                     string jsonContent = SerializeConfig(config);
 
-                    string targetPath = $"{OutputBaseFolder}/{displayName}/{platform}/config.json";
+                    string targetPath = $"{AppSettings.OutputBaseFolder}/{displayName}/{platform}/config.json";
                     string commitMsg = $"chore: update {displayName} sing-box config [{platform}]";
 
-                    Console.WriteLine($"[INFO] 正在上传到 {Repo}/{targetPath}...");
+                    Console.WriteLine($"[INFO] 正在上传到 {AppSettings.RepoName}/{targetPath}...");
                     await github.UploadFileAsync(targetPath, jsonContent, commitMsg);
-                    Console.WriteLine($"[SUCCESS] {displayName} -> {owner}/{Repo}/{targetPath}");
+                    Console.WriteLine($"[SUCCESS] {displayName} -> {owner}/{AppSettings.RepoName}/{targetPath}");
                     success++;
                 }
                 catch (Exception ex)
@@ -222,8 +225,8 @@ public static class ConversionOrchestrator
                 SingboxConfig config = ConvertYaml(yamlContent, platform);
                 string jsonContent = SerializeConfig(config);
 
-                File.WriteAllText(LocalOutputFile, jsonContent);
-                Console.WriteLine($"[SUCCESS] {displayName} ({platform}) -> {LocalOutputFile}");
+                File.WriteAllText(AppSettings.LocalOutputFile, jsonContent);
+                Console.WriteLine($"[SUCCESS] {displayName} ({platform}) -> {AppSettings.LocalOutputFile}");
             }
             catch (Exception ex)
             {
