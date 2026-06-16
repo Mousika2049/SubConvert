@@ -91,54 +91,9 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             _allNodeNames.Add(name);
             if (!IPAddress.TryParse(server, out _)) _proxyServerDomains.Add(server);
 
-            // 提取公共的 TLS 配置逻辑依然保留在 Builder 中
-            OutboundTls? tlsConfig = ExtractTlsConfig(p, type, server);
-
-            _nodeOutbounds.Add(converter.Convert(p, name, server, port, tlsConfig));
+            _nodeOutbounds.Add(converter.Convert(p, name, server, port));
         }
         return this;
-    }
-
-    private OutboundTls? ExtractTlsConfig(Dictionary<string, object> p, string type, string server)
-    {
-        bool isTls = p.TryGetValue("tls", out var tlsObj) && bool.TryParse(tlsObj.ToString(), out var b) && b;
-        bool isReality = p.ContainsKey("reality-opts");
-
-        // 如果既没标 tls，也不是 reality，且不是天生走 tls 的 trojan，则返回 null
-        if (type != "trojan" && !isTls && !isReality) return null;
-
-        // 提取 Reality 专属
-        OutboundReality? realityConfig = null;
-        if (isReality && p["reality-opts"] is Dictionary<object, object> realityOpts)
-        {
-            realityConfig = new OutboundReality
-            {
-                Enabled = true,
-                PublicKey = realityOpts.TryGetValue("public-key", out var pk) ? pk.ToString() : null,
-                ShortId = realityOpts.TryGetValue("short-id", out var sid) ? sid.ToString() : null
-            };
-        }
-
-        // 提取指纹
-        string fp = p.TryGetValue("client-fingerprint", out var fpObj) ? fpObj.ToString()! : "firefox";
-
-        // 优雅处理 sni、servername 与 fallback 逻辑，杜绝空指针异常
-        string serverName = server; // 默认 fallback 到 server
-        if (p.TryGetValue("sni", out var sniObj))
-            serverName = sniObj.ToString()!;
-        else if (p.TryGetValue("servername", out var snObj))
-            serverName = snObj.ToString()!;
-
-        return new OutboundTls
-        {
-            Enabled = true,
-            ServerName = serverName,
-            Insecure = p.TryGetValue("skip-cert-verify", out var skipCert) && bool.TryParse(skipCert.ToString(), out var insec) ? insec : null,
-            Utls = new Utls { Enabled = true, Fingerprint = fp },
-            Alpn = ["h2", "http/1.1"],
-            MinVersion = "1.3",
-            Reality = realityConfig
-        };
     }
 
     public SingboxConfigBuilder WithRegionOutbounds()

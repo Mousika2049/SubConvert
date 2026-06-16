@@ -1,4 +1,5 @@
 using SubConvert.Models.Singbox;
+using SubConvert.Helpers;
 
 namespace SubConvert.Converters;
 
@@ -6,8 +7,9 @@ public class VlessConverter : IProxyConverter
 {
     public bool CanHandle(string proxyType) => proxyType == "vless";
 
-    public Outbound Convert(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
+    public Outbound Convert(Dictionary<string, object> p, string name, string server, int port)
     {
+        OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server);
         return new Outbound
         {
             Type = "vless",

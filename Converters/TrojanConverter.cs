@@ -1,4 +1,5 @@
 using SubConvert.Models.Singbox;
+using SubConvert.Helpers;
 
 namespace SubConvert.Converters;
 
@@ -6,8 +7,10 @@ public class TrojanConverter : IProxyConverter
 {
     public bool CanHandle(string proxyType) => proxyType == "trojan";
 
-    public Outbound Convert(Dictionary<string, object> p, string name, string server, int port, OutboundTls? tlsConfig)
+    public Outbound Convert(Dictionary<string, object> p, string name, string server, int port)
     {
+        // Trojan 默认 forceTls = true
+        OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
         return new Outbound
         {
             Type = "trojan",
