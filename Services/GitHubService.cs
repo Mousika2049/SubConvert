@@ -1,21 +1,9 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using SubConvert.Models.GitHub;
 
 namespace SubConvert.Services;
-
-// ── GitHub API 响应模型 ────────────────────────────────────────────────────────
-
-public record GitHubContentItem
-{
-    [JsonPropertyName("name")] public string Name { get; init; } = "";
-    [JsonPropertyName("path")] public string Path { get; init; } = "";
-    [JsonPropertyName("type")] public string Type { get; init; } = "";
-    [JsonPropertyName("sha")] public string? Sha { get; init; }
-    // 单文件 GET 时才存在，内容为 Base64（带换行），列目录时为 null
-    [JsonPropertyName("content")] public string? Content { get; init; }
-}
 
 // ── GitHub API 服务封装 ───────────────────────────────────────────────────────
 

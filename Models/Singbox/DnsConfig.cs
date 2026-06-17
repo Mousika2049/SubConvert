@@ -6,9 +6,9 @@ public record DnsConfig
 {
     [JsonPropertyName("servers")] public List<DnsServer> Servers { get; init; } = [];
     [JsonPropertyName("rules")] public List<DnsRule> Rules { get; init; } = [];
-    [JsonPropertyName("final")] public string? Final { get; init; } = "remote";
-    [JsonPropertyName("strategy")] public string? Strategy { get; init; } = "prefer_ipv4";
-    [JsonPropertyName("reverse_mapping")] public bool? ReverseMapping { get; init; } = true;
+    [JsonPropertyName("final")] public string Final { get; init; } = "remote";
+    [JsonPropertyName("strategy")] public string Strategy { get; init; } = "prefer_ipv4";
+    [JsonPropertyName("reverse_mapping")] public bool ReverseMapping { get; init; } = true;
 }
 
 public record DnsServer

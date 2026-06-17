@@ -5,5 +5,7 @@ namespace SubConvert.Converters;
 public interface IProxyConverter
 {
     bool CanHandle(string proxyType);
-    Outbound Convert(Dictionary<string, object> proxy, string name, string server, int port);
+    
+    // 只有字典，干净利落
+    Outbound Convert(Dictionary<string, object> proxy);
 }

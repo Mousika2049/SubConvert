@@ -1,17 +1,11 @@
 using System.Net;
 using SubConvert.Configuration;
+using SubConvert.Models;
 using SubConvert.Models.Clash;
 using SubConvert.Models.Singbox;
 using SubConvert.Converters;
 
 namespace SubConvert.Builders;
-
-public enum TargetPlatform
-{
-    Windows,
-    Android,
-    Linux
-}
 
 public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyConverter> converters)
 {
@@ -20,7 +14,8 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
     private readonly LogConfig _log = new();
     private readonly DnsConfig _dns = new();
     private readonly List<Inbound> _inbounds = [];
-    private readonly RouteConfig _route = new();
+    // 修改：在此处将配置层的值注入到模型中
+    private readonly RouteConfig _route = new() { Final = AppSettings.MainProxyGroup };
     private readonly HashSet<string> _proxyServerDomains = [];
     private readonly List<string> _allNodeNames = [];
     private readonly List<string> _finalRegionGroupNames = [];
@@ -46,7 +41,7 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
                 TargetPlatform.Windows => "mixed",
                 TargetPlatform.Linux => "system",
                 TargetPlatform.Android => "system",
-                _ => null
+                _ => "system",
             },
             Mtu = 1400
         });
@@ -80,18 +75,26 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             if (!p.TryGetValue("type", out var typeObj)) continue;
             string type = typeObj.ToString()!;
 
-            // 核心变动：动态查找匹配的 Converter，告别 switch
             var converter = _converters.FirstOrDefault(c => c.CanHandle(type));
             if (converter == null) continue;
 
-            string name = p["name"].ToString()!;
-            string server = p["server"].ToString()!;
-            int port = int.Parse(p["port"].ToString()!);
+            // 1. Converter 全权负责解析字典，返回标准模型
+            Outbound outbound = converter.Convert(p);
+            
+            if (outbound == null) continue; // 防御性编程
 
-            _allNodeNames.Add(name);
-            if (!IPAddress.TryParse(server, out _)) _proxyServerDomains.Add(server);
+            // 2. Builder 只从标准化的结果中收集全局状态（反向读取）
+            if (!string.IsNullOrEmpty(outbound.Tag))
+            {
+                _allNodeNames.Add(outbound.Tag);
+            }
+            
+            if (!string.IsNullOrEmpty(outbound.Server) && !IPAddress.TryParse(outbound.Server, out _))
+            {
+                _proxyServerDomains.Add(outbound.Server);
+            }
 
-            _nodeOutbounds.Add(converter.Convert(p, name, server, port));
+            _nodeOutbounds.Add(outbound);
         }
         return this;
     }
@@ -219,14 +222,14 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             new RouteRule { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
             new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = AppSettings.Direct },
             new RouteRule { RuleSet = ["geosite-category-ads-all"], Action = "reject" },
-            new RouteRule { RuleSet = ["geosite-spotify"], Action = "route", Outbound = "🎵 Spotify" },
-            new RouteRule { RuleSet = ["geosite-steam"], Action = "route", Outbound = "🎮 Steam" },
-            new RouteRule { RuleSet = ["geosite-category-ai-!cn"], Action = "route", Outbound = "🤖 AI" },
-            new RouteRule { RuleSet = ["geosite-microsoft"], Action = "route", Outbound = "🪟 Microsoft" },
-            new RouteRule { RuleSet = ["geosite-telegram"], Action = "route", Outbound = "✈️ Telegram" },
+            new RouteRule { RuleSet = ["geosite-spotify"], Action = "route", Outbound = ServiceGroupNames.Spotify },
+            new RouteRule { RuleSet = ["geosite-steam"], Action = "route", Outbound = ServiceGroupNames.Steam },
+            new RouteRule { RuleSet = ["geosite-category-ai-!cn"], Action = "route", Outbound = ServiceGroupNames.Ai },
+            new RouteRule { RuleSet = ["geosite-microsoft"], Action = "route", Outbound = ServiceGroupNames.Microsoft },
+            new RouteRule { RuleSet = ["geosite-telegram"], Action = "route", Outbound = ServiceGroupNames.Telegram },
             new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = AppSettings.Direct },
             new RouteRule { Inbound = ["mixed-in"], Action = "resolve" },
-            new RouteRule { RuleSet = ["geoip-telegram"], Action = "route", Outbound = "✈️ Telegram" },
+            new RouteRule { RuleSet = ["geoip-telegram"], Action = "route", Outbound = ServiceGroupNames.Telegram },
             new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = AppSettings.Direct }
         ]);
 

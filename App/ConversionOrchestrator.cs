@@ -4,6 +4,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SubConvert.Builders;
+using SubConvert.Models;
 using SubConvert.Models.Singbox;
 using SubConvert.Parsers;
 using SubConvert.Services;
@@ -14,8 +15,20 @@ namespace SubConvert.App;
 
 public static class ConversionOrchestrator
 {
-    
-    // ── 辅助方法 ──────────────────────────────────────────────────────────────
+    // ── 序列化配置（全局缓存以提升性能） ───────────────────────────────────────
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    // 注册可用的转换策略
+    private static readonly IReadOnlyList<IProxyConverter> Converters =
+    [
+        new TrojanConverter(),
+        new VlessConverter()
+    ];
 
     private static string GetContentHash(string content)
     {
@@ -29,15 +42,8 @@ public static class ConversionOrchestrator
         var clashConfig = ClashParser.Parse(yamlContent)
             ?? throw new InvalidOperationException("YAML 解析失败，请检查文件内容。");
 
-        // 注册可用的转换策略
-        var converters = new List<IProxyConverter>
-        {
-            new TrojanConverter(),
-            new VlessConverter()
-        };
-
         // 将转换策略注入到 Builder 中
-        var config = new SingboxConfigBuilder(platform, converters)
+        var config = new SingboxConfigBuilder(platform, Converters)
             .WithDefaultInbounds()
             .WithDirectOutbound()
             .WithProxyNodes(clashConfig)
@@ -75,17 +81,11 @@ public static class ConversionOrchestrator
     /// <summary>将 SingboxConfig 序列化为格式化 JSON 字符串。</summary>
     private static string SerializeConfig(SingboxConfig config)
     {
-        var opts = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        };
-        return JsonSerializer.Serialize(config, opts);
+        return JsonSerializer.Serialize(config, JsonOptions);
     }
 
     /// <summary>从环境变量读取值；若不存在则在控制台提示用户输入。</summary>
-    public static string RequireInput(string envVar, string prompt, bool secret = false)
+    private static string RequireInput(string envVar, string prompt, bool secret = false)
     {
         string? value = Environment.GetEnvironmentVariable(envVar);
         if (!string.IsNullOrWhiteSpace(value))
@@ -118,9 +118,14 @@ public static class ConversionOrchestrator
 
     public static async Task RunAsync()
     {
-        // 1. 获取认证信息 (直接读取 AppSettings)
-        string owner = AppSettings.DefaultGitHubOwner;
-        string token = AppSettings.DefaultGitHubToken;
+        // 1. 获取认证信息：AppSettings 硬编码兜底 -> 环境变量 -> 控制台交互输入
+        string owner = !string.IsNullOrWhiteSpace(AppSettings.DefaultGitHubOwner) 
+            ? AppSettings.DefaultGitHubOwner 
+            : RequireInput("GITHUB_OWNER", "请输入 GitHub 用户名 (仓库所有者): ");
+
+        string token = !string.IsNullOrWhiteSpace(AppSettings.DefaultGitHubToken) 
+            ? AppSettings.DefaultGitHubToken 
+            : RequireInput("GITHUB_TOKEN", "请输入 GitHub Personal Access Token: ", secret: true);
 
         if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(token))
         {
