@@ -3,8 +3,8 @@ namespace SubConvert.Configuration;
 public static class AppSettings
 {
     // ── GitHub 认证与仓库配置 ──
-    public const string DefaultGitHubOwner = "Mousika2049";
-    public const string DefaultGitHubToken = "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";
+    public const string DefaultGitHubOwner = "";
+    public const string DefaultGitHubToken = "";
     public const string RepoName = "SubConfigHub";
     public const string SubconfigsFolder = "clashConfigs";
     public const string OutputBaseFolder = "singboxConfigs";

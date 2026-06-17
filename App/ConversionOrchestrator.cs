@@ -85,7 +85,7 @@ public static class ConversionOrchestrator
     }
 
     /// <summary>从环境变量读取值；若不存在则在控制台提示用户输入。</summary>
-    private static string RequireInput(string envVar, string prompt, bool secret = false)
+    public static string RequireInput(string envVar, string prompt, bool secret = false)
     {
         string? value = Environment.GetEnvironmentVariable(envVar);
         if (!string.IsNullOrWhiteSpace(value))
