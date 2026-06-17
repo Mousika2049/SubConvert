@@ -81,8 +81,6 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             // 1. Converter 全权负责解析字典，返回标准模型
             Outbound outbound = converter.Convert(p);
             
-            if (outbound == null) continue; // 防御性编程
-
             // 2. Builder 只从标准化的结果中收集全局状态（反向读取）
             if (!string.IsNullOrEmpty(outbound.Tag))
             {
@@ -143,7 +141,6 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
         serviceGroupOptions.Add(AppSettings.Direct);
 
         string usGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? AppSettings.MainProxyGroup;
-        string sgGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇸🇬")) ?? AppSettings.MainProxyGroup;
         string hkGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? AppSettings.MainProxyGroup;
 
         var specialGroups = ProfileDefinitions.GetServiceGroupMappings(usGroup, hkGroup, AppSettings.MainProxyGroup);
