@@ -1,19 +1,20 @@
 # SubConvert
 
-将 Clash `proxies` YAML 批量转换为 sing-box `config.json` 的命令行工具，支持单文件本地输出和批量上传 GitHub。
+SubConvert 是一个将 Clash YAML 配置转换为 sing-box `config.json` 的命令行工具。它会从 GitHub 仓库读取机场配置，按平台生成 sing-box 配置，并支持单文件本地输出或批量回写到仓库。
 
-## 当前能力
+## 特性
 
-- 从 GitHub 仓库读取 `subconfigs/*.yaml`
-- 仅转换 `trojan`、`vless` 节点（含 TLS / REALITY 字段映射）
-- 自动生成地区分组（香港 / 狮城 / 日本 / 美国）与服务分组（Spotify / Steam / AI / Microsoft / Telegram）
-- 生成 DNS、路由规则与远程 rule-set（MetaCubeX `geosite`/`geoip`）
-- 按平台生成差异配置（Windows / Android / Linux）
+- 从 GitHub 仓库读取 `clashConfigs/*.yaml`
+- 仅转换 `trojan`、`vless` 、`hysteria2` 节点，包含 TLS / REALITY 字段映射
+- 自动生成地区分组与服务分组
+- 自动生成 DNS、路由规则和远程 rule-set
+- 按平台生成差异配置，支持 Windows / Android / Linux
+- 支持单机场本地导出，也支持批量上传到 GitHub
 
 ## 运行环境
 
-- .NET SDK `10.0`
-- NuGet 依赖：`YamlDotNet`
+- .NET SDK 10.0
+- NuGet 依赖：YamlDotNet、Microsoft.Extensions.Configuration 相关包
 
 ## 运行方式
 
@@ -21,19 +22,55 @@
 dotnet run
 ```
 
-运行后会交互式选择：
+也可以通过命令行覆盖配置项，例如：
 
-1. 目标平台（Windows / Android / Linux）
-2. 机场配置（单个或全部）
+```bash
+dotnet run -- --GitHubOwner=your-name --GitHubToken=your-token
+```
+
+程序启动后会先读取环境变量和命令行参数；如果仍缺少 `GitHubOwner` 或 `GitHubToken`，会在终端中交互式提示输入。
+
+## 交互流程
+
+启动后依次选择：
+
+1. 目标平台：Windows / Android / Linux
+2. 要处理的机场配置：单个或全部
+
+选择“全部”时，会批量转换并上传到 GitHub；选择单个配置时，会输出到本地文件。
 
 ## 输入与输出
 
-- **输入来源**：`{owner}/SubConfigHub/subconfigs/*.yaml`
-- **单机场模式输出**：项目根目录 `config.json`
-- **批量模式输出**：上传到 `{owner}/SubConfigHub/singboxConfigs/{机场名}/{平台}/config.json`
+- 输入仓库：默认 `SubConfigHub`
+- 输入目录：默认 `clashConfigs`
+- 批量输出目录：默认 `singboxConfigs/{机场名}/{平台}/config.json`
+- 单机场本地输出：默认 `config.json`
 
-## 配置说明
+默认输入仓库路径示例：`{owner}/SubConfigHub/clashConfigs/*.yaml`
+
+## 配置项
+
+以下配置项可通过环境变量或命令行参数提供：
+
+- `GitHubOwner`
+- `GitHubToken`
+- `RepoName`
+- `SubconfigsFolder`
+- `OutputBaseFolder`
+- `LocalOutputFile`
+- `MainProxyGroup`
+- `Direct`
+
+环境变量会使用 `SUBCONVERT_` 前缀，例如：
+
+- `SUBCONVERT_GitHubOwner`
+- `SUBCONVERT_GitHubToken`
+- `SUBCONVERT_RepoName`
+
+如果未设置这些变量，程序会继续提示输入 `GITHUB_OWNER` 和 `GITHUB_TOKEN`。
+
+## 说明
 
 - Android 平台不会写入 `experimental.clash_api`。
-- Windows 的 `external_ui` 为 `ui`，Linux 为 `/etc/sing-box/ui`。
-- 当前 `Program.cs` 默认写死了 `owner/token`；如需改为环境变量输入，可启用 `RequireInput("GITHUB_OWNER")` 与 `RequireInput("GITHUB_TOKEN")` 相关代码。
+- Windows 的 `external_ui` 为 `ui`，Linux 的 `external_ui` 为 `/etc/sing-box/ui`。
+- 批量模式会将结果直接提交到仓库对应路径；单机场模式只写入本地 `config.json`。
