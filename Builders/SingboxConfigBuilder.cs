@@ -7,63 +7,76 @@ using SubConvert.Converters;
 
 namespace SubConvert.Builders;
 
-// 1. 构造函数新增 AppSettings 参数
 public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyConverter> converters, AppSettings appSettings)
 {
+    // 1. 只有绝对不可变的依赖配置，彻底移除所有装配状态字段
     private readonly TargetPlatform _platform = platform;
     private readonly IEnumerable<IProxyConverter> _converters = converters;
-    private readonly AppSettings _appSettings = appSettings; // 2. 保存为私有只读字段
-    
-    private readonly LogConfig _log = new();
-    private readonly DnsConfig _dns = new();
-    private readonly List<Inbound> _inbounds = [];
-    
-    // 3. 使用注入的 appSettings
-    private readonly RouteConfig _route = new() { Final = appSettings.MainProxyGroup };
-    
-    private readonly HashSet<string> _proxyServerDomains = [];
-    private readonly List<string> _allNodeNames = [];
-    private readonly List<string> _finalRegionGroupNames = [];
-    
-    private Outbound? _directOutbound;
-    private readonly List<Outbound> _nodeOutbounds = [];
-    private readonly List<Outbound> _regionOutbounds = [];
-    private readonly List<Outbound> _mainOutbounds = [];
-    private readonly List<Outbound> _serviceOutbounds = [];
+    private readonly AppSettings _appSettings = appSettings;
+
+    // 2. 引入内部类：将单次构建的所有状态封装在独立上下文中
+    private class BuildContext
+    {
+        public LogConfig Log { get; } = new();
+        public DnsConfig Dns { get; } = new();
+        public List<Inbound> Inbounds { get; } = [];
+        public RouteConfig Route { get; set; } = new(); // 在实例化时注入默认 Final
+
+        public HashSet<string> ProxyServerDomains { get; } = [];
+        public List<string> AllNodeNames { get; } = [];
+        public List<string> FinalRegionGroupNames { get; } = [];
+
+        public Outbound? DirectOutbound { get; set; }
+        public List<Outbound> NodeOutbounds { get; } = [];
+        public List<Outbound> RegionOutbounds { get; } = [];
+        public List<Outbound> MainOutbounds { get; } = [];
+        public List<Outbound> ServiceOutbounds { get; } = [];
+    }
+
+    // ── 唯一暴露的公共入口 ──────────────────────────────────────────────────
 
     public SingboxConfig Build(ClashConfig clashConfig)
     {
-        BuildDefaultInbounds();
-        BuildDirectOutbound();
-        BuildProxyNodes(clashConfig); 
-        BuildRegionOutbounds();
-        BuildProxyGroups();
-        BuildDns();                   
-        BuildRouting();
+        // 3. 每次构建都会开辟一块全新的独立沙箱上下文，绝不相互污染
+        var ctx = new BuildContext
+        {
+            Route = new RouteConfig { Final = _appSettings.MainProxyGroup }
+        };
+
+        // 4. 将上下文像接力棒一样在流水线中传递
+        BuildDefaultInbounds(ctx);
+        BuildDirectOutbound(ctx);
+        BuildProxyNodes(ctx, clashConfig); 
+        BuildRegionOutbounds(ctx);
+        BuildProxyGroups(ctx);
+        BuildDns(ctx);                   
+        BuildRouting(ctx);
 
         var orderedOutbounds = new List<Outbound>();
-        orderedOutbounds.AddRange(_mainOutbounds);
-        orderedOutbounds.AddRange(_regionOutbounds);
-        orderedOutbounds.AddRange(_serviceOutbounds);
-        orderedOutbounds.AddRange(_nodeOutbounds);
-        if (_directOutbound != null)
+        orderedOutbounds.AddRange(ctx.MainOutbounds);
+        orderedOutbounds.AddRange(ctx.RegionOutbounds);
+        orderedOutbounds.AddRange(ctx.ServiceOutbounds);
+        orderedOutbounds.AddRange(ctx.NodeOutbounds);
+        if (ctx.DirectOutbound != null)
         {
-            orderedOutbounds.Add(_directOutbound);
+            orderedOutbounds.Add(ctx.DirectOutbound);
         }
 
         return new SingboxConfig
         {
-            Log = _log,
-            Dns = _dns,
-            Inbounds = _inbounds,
+            Log = ctx.Log,
+            Dns = ctx.Dns,
+            Inbounds = ctx.Inbounds,
             Outbounds = orderedOutbounds,
-            Route = _route,
+            Route = ctx.Route,
         };
     }
 
-    private void BuildDefaultInbounds()
+    // ── 内部组装工序 (全部接收 BuildContext) ───────────────────────────────
+
+    private void BuildDefaultInbounds(BuildContext ctx)
     {
-        _inbounds.Add(new Inbound
+        ctx.Inbounds.Add(new Inbound
         {
             Type = "tun",
             Tag = "tun-in",
@@ -80,7 +93,7 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             },
             Mtu = 1400
         });
-        _inbounds.Add(new Inbound
+        ctx.Inbounds.Add(new Inbound
         {
             Type = "mixed",
             Tag = "mixed-in",
@@ -89,17 +102,17 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
         });
     }
 
-    private void BuildDirectOutbound()
+    private void BuildDirectOutbound(BuildContext ctx)
     {
-        _directOutbound = new Outbound
+        ctx.DirectOutbound = new Outbound
         {
             Type = "direct",
-            Tag = _appSettings.Direct, // 修改这里
+            Tag = _appSettings.Direct,
             DomainResolver = "local"
         };
     }
 
-    private void BuildProxyNodes(ClashConfig clashConfig)
+    private void BuildProxyNodes(BuildContext ctx, ClashConfig clashConfig)
     {
         if (clashConfig.Proxies == null) return;
 
@@ -115,26 +128,26 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             if (outbound == null) continue;
 
             if (!string.IsNullOrEmpty(outbound.Tag))
-                _allNodeNames.Add(outbound.Tag);
+                ctx.AllNodeNames.Add(outbound.Tag);
             
             if (!string.IsNullOrEmpty(outbound.Server) && !IPAddress.TryParse(outbound.Server, out _))
-                _proxyServerDomains.Add(outbound.Server);
+                ctx.ProxyServerDomains.Add(outbound.Server);
 
-            _nodeOutbounds.Add(outbound);
+            ctx.NodeOutbounds.Add(outbound);
         }
     }
 
-    private void BuildRegionOutbounds()
+    private void BuildRegionOutbounds(BuildContext ctx)
     {
         foreach (var region in ProfileDefinitions.RegionRegexes)
         {
             string groupName = region.Key;
-            var matchedNodes = _allNodeNames.Where(name => region.Value.IsMatch(name)).ToList();
+            var matchedNodes = ctx.AllNodeNames.Where(name => region.Value.IsMatch(name)).ToList();
 
             if (matchedNodes.Count >= 2)
             {
-                _finalRegionGroupNames.Add(groupName);
-                _regionOutbounds.Add(new Outbound
+                ctx.FinalRegionGroupNames.Add(groupName);
+                ctx.RegionOutbounds.Add(new Outbound
                 {
                     Type = "selector",
                     Tag = groupName,
@@ -146,32 +159,32 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
         }
     }
 
-    private void BuildProxyGroups()
+    private void BuildProxyGroups(BuildContext ctx)
     {
-        var mainGroupOptions = new List<string>(_finalRegionGroupNames);
-        mainGroupOptions.AddRange(_allNodeNames);
-        mainGroupOptions.Add(_appSettings.Direct); // 修改这里
+        var mainGroupOptions = new List<string>(ctx.FinalRegionGroupNames);
+        mainGroupOptions.AddRange(ctx.AllNodeNames);
+        mainGroupOptions.Add(_appSettings.Direct);
 
-        _mainOutbounds.Add(new Outbound
+        ctx.MainOutbounds.Add(new Outbound
         {
             Type = "selector",
-            Tag = _appSettings.MainProxyGroup, // 修改这里
+            Tag = _appSettings.MainProxyGroup,
             Outbounds = mainGroupOptions,
-            Default = _finalRegionGroupNames.FirstOrDefault() ?? _allNodeNames.FirstOrDefault() ?? _appSettings.Direct, // 修改这里
+            Default = ctx.FinalRegionGroupNames.FirstOrDefault() ?? ctx.AllNodeNames.FirstOrDefault() ?? _appSettings.Direct,
             InterruptExistConnections = true
         });
 
-        var serviceGroupOptions = new List<string> { _appSettings.MainProxyGroup }; // 修改这里
-        serviceGroupOptions.AddRange(_finalRegionGroupNames);
-        serviceGroupOptions.AddRange(_allNodeNames);
-        serviceGroupOptions.Add(_appSettings.Direct); // 修改这里
+        var serviceGroupOptions = new List<string> { _appSettings.MainProxyGroup };
+        serviceGroupOptions.AddRange(ctx.FinalRegionGroupNames);
+        serviceGroupOptions.AddRange(ctx.AllNodeNames);
+        serviceGroupOptions.Add(_appSettings.Direct);
 
-        string usGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? _appSettings.MainProxyGroup; // 修改这里
-        string hkGroup = _finalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? _appSettings.MainProxyGroup; // 修改这里
+        string usGroup = ctx.FinalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? _appSettings.MainProxyGroup;
+        string hkGroup = ctx.FinalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? _appSettings.MainProxyGroup;
 
-        var specialGroups = ProfileDefinitions.GetServiceGroupMappings(usGroup, hkGroup, _appSettings.MainProxyGroup); // 修改这里
+        var specialGroups = ProfileDefinitions.GetServiceGroupMappings(usGroup, hkGroup, _appSettings.MainProxyGroup);
 
-        _serviceOutbounds.AddRange(specialGroups.Select(group => new Outbound
+        ctx.ServiceOutbounds.AddRange(specialGroups.Select(group => new Outbound
         {
             Type = "selector",
             Tag = group.Key,
@@ -181,29 +194,29 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
         }));
     }
 
-    private void BuildDns()
+    private void BuildDns(BuildContext ctx)
     {
-        _dns.Servers.AddRange([
+        ctx.Dns.Servers.AddRange([
             new DnsServer { Tag = "bootstrap", Type = "local" },
             new DnsServer { Tag = "node-resolver", Type = "https", Server = "223.5.5.5" },
-            new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = _appSettings.MainProxyGroup }, // 修改这里
+            new DnsServer { Tag = "remote", Type = "https", Server = "1.1.1.1", Detour = _appSettings.MainProxyGroup },
             new DnsServer { Tag = "local", Type = "https", Server = "223.5.5.5" }
         ]);
 
-        _dns.Rules.Add(new DnsRule { QueryType = ["AAAA"], Action = "predefined", Rcode = "NOERROR" });
-        _dns.Rules.Add(new DnsRule { RuleSet = ["geosite-category-ads-all"], Action = "predefined", Rcode = "NOERROR" });
+        ctx.Dns.Rules.Add(new DnsRule { QueryType = ["AAAA"], Action = "predefined", Rcode = "NOERROR" });
+        ctx.Dns.Rules.Add(new DnsRule { RuleSet = ["geosite-category-ads-all"], Action = "predefined", Rcode = "NOERROR" });
 
-        if (_proxyServerDomains.Count > 0)
+        if (ctx.ProxyServerDomains.Count > 0)
         {
-            _dns.Rules.Add(new DnsRule { Domain = [.. _proxyServerDomains], Action = "route", Server = "node-resolver" });
+            ctx.Dns.Rules.Add(new DnsRule { Domain = [.. ctx.ProxyServerDomains], Action = "route", Server = "node-resolver" });
         }
 
-        _dns.Rules.Add(new DnsRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Server = "local" });
+        ctx.Dns.Rules.Add(new DnsRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Server = "local" });
     }
 
-    private void BuildRouting()
+    private void BuildRouting(BuildContext ctx)
     {
-        _route.RuleSet.AddRange([
+        ctx.Route.RuleSet.AddRange([
             CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "category-ads-all"),
             CreateRemoteRuleSet("geosite-category-pt", "geosite", "category-pt"),
             CreateRemoteRuleSet("geosite-cn", "geosite", "cn"),
@@ -216,7 +229,7 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             CreateRemoteRuleSet("geoip-telegram", "geoip", "telegram"),
         ]);
 
-        _route.Rules.AddRange([
+        ctx.Route.Rules.AddRange([
             new RouteRule
             {
                 Type = "logical",
@@ -233,34 +246,33 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
                 ],
                 Action = "hijack-dns"
             },
-            new RouteRule { IpIsPrivate = true, Action = "route", Outbound = _appSettings.Direct }, // 修改这里
+            new RouteRule { IpIsPrivate = true, Action = "route", Outbound = _appSettings.Direct },
             new RouteRule { IpCidr = ["::/0"], Action = "reject" },
-            new RouteRule { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = _appSettings.Direct }, // 修改这里
+            new RouteRule { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = _appSettings.Direct },
             new RouteRule { Port = [3478, 3479, 19302, 19303], Network = ["udp"], Action = "reject" },
             new RouteRule { Inbound = ["tun-in", "mixed-in"], Port = [443], Network = ["udp"], Action = "reject" },
             new RouteRule { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
-            new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = _appSettings.Direct }, // 修改这里
+            new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = _appSettings.Direct },
             new RouteRule { RuleSet = ["geosite-category-ads-all"], Action = "reject" },
             new RouteRule { RuleSet = ["geosite-spotify"], Action = "route", Outbound = ServiceGroupNames.Spotify },
             new RouteRule { RuleSet = ["geosite-steam"], Action = "route", Outbound = ServiceGroupNames.Steam },
             new RouteRule { RuleSet = ["geosite-category-ai-!cn"], Action = "route", Outbound = ServiceGroupNames.Ai },
             new RouteRule { RuleSet = ["geosite-microsoft"], Action = "route", Outbound = ServiceGroupNames.Microsoft },
             new RouteRule { RuleSet = ["geosite-telegram"], Action = "route", Outbound = ServiceGroupNames.Telegram },
-            new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = _appSettings.Direct }, // 修改这里
+            new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = _appSettings.Direct },
             new RouteRule { Inbound = ["mixed-in"], Action = "resolve" },
             new RouteRule { RuleSet = ["geoip-telegram"], Action = "route", Outbound = ServiceGroupNames.Telegram },
-            new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = _appSettings.Direct } // 修改这里
+            new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = _appSettings.Direct }
         ]);
     }
 
-    // 4. 移除 static 关键字，使其能访问 _appSettings
     private SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName) => new()
     {
         Tag = tag,
         Type = "remote",
         Format = "binary",
         Url = $"https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/{repoType}/{fileName}.srs",
-        DownloadDetour = _appSettings.Direct, // 修改这里
+        DownloadDetour = _appSettings.Direct,
         UpdateInterval = "1d"
     };
 }

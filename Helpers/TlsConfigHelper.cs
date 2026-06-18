@@ -11,6 +11,7 @@ public static class TlsConfigHelper
 
         if (!forceTls && !isTls && !isReality) return null;
 
+        // 提取 Reality 专属
         OutboundReality? realityConfig = null;
         if (isReality && p["reality-opts"] is Dictionary<object, object> realityOpts)
         {
@@ -30,13 +31,28 @@ public static class TlsConfigHelper
         else if (p.TryGetValue("servername", out var snObj))
             serverName = snObj.ToString()!;
 
+        // 新增：动态解析 ALPN，如果不存在则使用默认值
+        List<string> alpnList = ["h2", "http/1.1"];
+        if (p.TryGetValue("alpn", out var alpnObj))
+        {
+            // YamlDotNet 通常将 YAML 数组反序列化为 List<object>
+            if (alpnObj is List<object> list)
+            {
+                alpnList = [.. list.Select(x => x.ToString()!)];
+            }
+            else if (alpnObj is string alpnStr)
+            {
+                alpnList = [alpnStr];
+            }
+        }
+
         return new OutboundTls
         {
             Enabled = true,
             ServerName = serverName,
             Insecure = p.TryGetValue("skip-cert-verify", out var skipCert) && bool.TryParse(skipCert.ToString(), out var insec) ? insec : null,
             Utls = new Utls { Enabled = true, Fingerprint = fp },
-            Alpn = ["h2", "http/1.1"],
+            Alpn = alpnList, // 注入动态读取的 ALPN
             MinVersion = "1.3",
             Reality = realityConfig
         };

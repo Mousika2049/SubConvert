@@ -12,7 +12,8 @@ public static class ConversionService
     private static readonly IReadOnlyList<IProxyConverter> Converters =
     [
         new TrojanConverter(),
-        new VlessConverter()
+        new VlessConverter(),
+        new Hysteria2Converter()
     ];
 
     // 新增参数 AppSettings appSettings

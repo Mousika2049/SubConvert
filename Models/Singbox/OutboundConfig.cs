@@ -7,12 +7,25 @@ public record Outbound
     [JsonPropertyName("type")] public string? Type { get; init; }
     [JsonPropertyName("tag")] public string? Tag { get; init; }
     [JsonPropertyName("server")] public string? Server { get; init; }
+    
+    // 基础端口与端口跳跃 (Hysteria2 专用)
     [JsonPropertyName("server_port")] public int? ServerPort { get; init; }
+    [JsonPropertyName("server_ports")] public List<string>? ServerPorts { get; init; }
+
     // VLESS 核心字段
     [JsonPropertyName("uuid")] public string? Uuid { get; init; }
     [JsonPropertyName("flow")] public string? Flow { get; init; }
     [JsonPropertyName("packet_encoding")] public string? PacketEncoding { get; init; }
+    
+    // 共享密码字段 (Trojan / Hysteria2)
     [JsonPropertyName("password")] public string? Password { get; init; }
+    
+    // Hysteria2 专属字段
+    [JsonPropertyName("up_mbps")] public int? UpMbps { get; init; }
+    [JsonPropertyName("down_mbps")] public int? DownMbps { get; init; }
+    [JsonPropertyName("obfs")] public OutboundObfs? Obfs { get; init; }
+
+    // 路由与其他字段
     [JsonPropertyName("outbounds")] public List<string>? Outbounds { get; init; }
     [JsonPropertyName("default")] public string? Default { get; init; }
     [JsonPropertyName("tls")] public OutboundTls? Tls { get; init; }
@@ -43,4 +56,11 @@ public record OutboundReality
     [JsonPropertyName("enabled")] public bool Enabled { get; init; }
     [JsonPropertyName("public_key")] public string? PublicKey { get; init; }
     [JsonPropertyName("short_id")] public string? ShortId { get; init; }
+}
+
+// 混淆配置模型
+public record OutboundObfs
+{
+    [JsonPropertyName("type")] public string? Type { get; init; }
+    [JsonPropertyName("password")] public string? Password { get; init; }
 }
