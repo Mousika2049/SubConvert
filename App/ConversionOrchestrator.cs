@@ -3,20 +3,33 @@ using SubConvert.Models;
 using SubConvert.Services;
 using SubConvert.Ui;
 using SubConvert.Workflows;
+using Microsoft.Extensions.Configuration;
 
 namespace SubConvert.App;
 
 public static class ConversionOrchestrator
 {
-    public static async Task RunAsync()
+    // 接收 args，使得工具支持命令行参数覆盖
+    public static async Task RunAsync(string[] args)
     {
-        // 1. 获取认证信息 (AppSettings 兜底 -> 环境变量 -> UI 交互)
-        string owner = !string.IsNullOrWhiteSpace(AppSettings.DefaultGitHubOwner) 
-            ? AppSettings.DefaultGitHubOwner 
+        // 1. 构建标准配置树：仅依赖环境变量和命令行参数
+        IConfiguration config = new ConfigurationBuilder()
+            // 支持环境变量，统一加前缀，例如 SUBCONVERT_GitHubToken
+            .AddEnvironmentVariables(prefix: "SUBCONVERT_") 
+            // 支持终端参数，例如 --GitHubOwner="MyName"
+            .AddCommandLine(args)
+            .Build();
+
+        // 将配置绑定到我们的实体类上
+        var appSettings = config.Get<AppSettings>() ?? new AppSettings();
+
+        // 2. 凭证检查与回退控制台输入
+        string owner = !string.IsNullOrWhiteSpace(appSettings.GitHubOwner) 
+            ? appSettings.GitHubOwner 
             : ConsoleUi.RequireInput("GITHUB_OWNER", "请输入 GitHub 用户名 (仓库所有者): ");
 
-        string token = !string.IsNullOrWhiteSpace(AppSettings.DefaultGitHubToken) 
-            ? AppSettings.DefaultGitHubToken 
+        string token = !string.IsNullOrWhiteSpace(appSettings.GitHubToken) 
+            ? appSettings.GitHubToken 
             : ConsoleUi.RequireInput("GITHUB_TOKEN", "请输入 GitHub Personal Access Token: ", secret: true);
 
         if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(token))
@@ -25,14 +38,14 @@ public static class ConversionOrchestrator
             return;
         }
 
-        var github = new GitHubService(token, owner, AppSettings.RepoName);
-
+        var github = new GitHubService(token, owner, appSettings.RepoName);
+        
         // 2. 获取仓库内 YAML 文件列表
-        Console.WriteLine($"\n[INFO] 正在获取 {owner}/{AppSettings.RepoName}/{AppSettings.SubconfigsFolder} 文件列表...");
+        Console.WriteLine($"\n[INFO] 正在获取 {owner}/{appSettings.RepoName}/{appSettings.SubconfigsFolder} 文件列表...");
         List<(string DisplayName, string RepoPath)> files;
         try
         {
-            files = await github.ListYamlFilesAsync(AppSettings.SubconfigsFolder);
+            files = await github.ListYamlFilesAsync(appSettings.SubconfigsFolder);
         }        
         catch (Exception ex)
         {
@@ -42,7 +55,7 @@ public static class ConversionOrchestrator
 
         if (files.Count == 0)
         {
-            Console.WriteLine($"[ERROR] {AppSettings.SubconfigsFolder}/ 文件夹内未找到任何 YAML 文件。");
+            Console.WriteLine($"[ERROR] {appSettings.SubconfigsFolder}/ 文件夹内未找到任何 YAML 文件。");
             return;
         }
 
@@ -61,12 +74,12 @@ public static class ConversionOrchestrator
         bool allMode = selection == files.Count + 1;
         if (allMode)
         {
-            await GitHubWorkflow.ProcessBatchAsync(github, files, platform, owner);
+            await GitHubWorkflow.ProcessBatchAsync(github, files, platform, owner, appSettings);
         }
         else
         {
             var (displayName, repoPath) = files[selection - 1];
-            await GitHubWorkflow.ProcessSingleAsync(github, displayName, repoPath, platform);
+            await GitHubWorkflow.ProcessSingleAsync(github, displayName, repoPath, platform, appSettings);
         }
     }
 }

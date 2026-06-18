@@ -1,3 +1,3 @@
 ﻿using SubConvert.App;
 
-await ConversionOrchestrator.RunAsync();
+await ConversionOrchestrator.RunAsync(args);

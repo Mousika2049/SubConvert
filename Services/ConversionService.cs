@@ -3,6 +3,7 @@ using SubConvert.Converters;
 using SubConvert.Models;
 using SubConvert.Models.Singbox;
 using SubConvert.Parsers;
+using SubConvert.Configuration;
 
 namespace SubConvert.Services;
 
@@ -14,26 +15,18 @@ public static class ConversionService
         new VlessConverter()
     ];
 
-    public static SingboxConfig Convert(string yamlContent, TargetPlatform platform)
+    // 新增参数 AppSettings appSettings
+    public static ConversionResult Convert(string yamlContent, TargetPlatform platform, AppSettings appSettings)
     {
         var clashConfig = ClashParser.Parse(yamlContent)
             ?? throw new InvalidOperationException("YAML 解析失败，请检查文件内容。");
 
-        var config = new SingboxConfigBuilder(platform, Converters)
-            .WithDefaultInbounds()
-            .WithDirectOutbound()
-            .WithProxyNodes(clashConfig)
-            .WithRegionOutbounds()
-            .WithProxyGroups()
-            .WithDns()
-            .WithRouting()
-            .Build();
+        // 将 appSettings 传给 Builder
+        var baseConfig = new SingboxConfigBuilder(platform, Converters, appSettings).Build(clashConfig);
 
-        // 计算 JSON 哈希以生成 CacheId
-        string json = ConfigSerializer.Serialize(config);
-        string hashId = ConfigSerializer.GetContentHash(json);
+        string hashId = ConfigSerializer.GetContentHash(yamlContent + platform);
 
-        return config with
+        var finalConfig = baseConfig with
         {
             Experimental = new ExperimentalConfig
             {
@@ -53,5 +46,9 @@ public static class ConversionService
                     : null
             }
         };
+
+        string finalJson = ConfigSerializer.Serialize(finalConfig);
+
+        return new ConversionResult(finalConfig, finalJson);
     }
 }
