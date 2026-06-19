@@ -10,9 +10,12 @@ public class VlessConverter : IProxyConverter
     public Outbound Convert(Dictionary<string, object> p)
     {
         // 1. 内部提取基础属性
-        string name = p["name"].ToString()!;
-        string server = p["server"].ToString()!;
-        int port = int.Parse(p["port"].ToString()!);
+        string name   = p.TryGetValue("name",   out var n) ? n.ToString()! : "unknown-vless";
+        string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";
+        if (!p.TryGetValue("port", out var pt) || !int.TryParse(pt.ToString(), out int port))
+        {
+            return null; // 跳过无效节点，不崩溃整个转换
+        }
 
         // 2. 提取 TLS 等协议特有属性
         OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server);

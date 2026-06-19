@@ -79,7 +79,7 @@ public class Hysteria2Converter : IProxyConverter
         {
             string str = val.ToString()!;
             // 剔除字母和空格，仅保留数字进行转换
-            string digits = new string(str.Where(char.IsDigit).ToArray());
+            string digits = new(str.Where(char.IsDigit).ToArray());
             if (int.TryParse(digits, out int speed))
             {
                 return speed;

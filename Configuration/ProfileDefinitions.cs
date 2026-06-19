@@ -1,28 +1,26 @@
 using System.Text.RegularExpressions;
+using SubConvert.Models;
 
 namespace SubConvert.Configuration;
 
 public static class ProfileDefinitions
 {
-    // 区域节点正则匹配规则
-    public static readonly IReadOnlyDictionary<string, Regex> RegionRegexes = new Dictionary<string, Regex>
+    public static readonly IReadOnlyDictionary<RegionId, (string DisplayName, Regex Pattern)> Regions = new Dictionary<RegionId, (string, Regex)>
     {
-        { "🇭🇰 香港", new Regex(@"(?i)香港|hong\s?kong|深港|🇭🇰|(?<![a-zA-Z])hkg?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
-        { "🇸🇬 狮城", new Regex(@"(?i)狮城|新加坡|singapore|🇸🇬|(?<![a-zA-Z])sgp?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
-        { "🇯🇵 日本", new Regex(@"(?i)日本|japan|tokyo|东京|大阪|🇯🇵|(?<![a-zA-Z])jpn?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
-        { "🇺🇸 美国", new Regex(@"(?i)美国|america|洛杉矶|硅谷|🇺🇸|(?<![a-zA-Z])usa?\d*(?![a-zA-Z])", RegexOptions.Compiled) },
+        { RegionId.HongKong, ("🇭🇰 香港", new Regex(@"(?i)香港|hong\s?kong|深港|🇭🇰|(?<![a-zA-Z])hkg?\d*(?![a-zA-Z])", RegexOptions.Compiled)) },
+        { RegionId.Singapore, ("🇸🇬 狮城", new Regex(@"(?i)狮城|新加坡|singapore|🇸🇬|(?<![a-zA-Z])sgp?\d*(?![a-zA-Z])", RegexOptions.Compiled)) },
+        { RegionId.Japan, ("🇯🇵 日本", new Regex(@"(?i)日本|japan|tokyo|东京|大阪|🇯🇵|(?<![a-zA-Z])jpn?\d*(?![a-zA-Z])", RegexOptions.Compiled)) },
+        { RegionId.UnitedStates, ("🇺🇸 美国", new Regex(@"(?i)美国|america|洛杉矶|硅谷|🇺🇸|(?<![a-zA-Z])usa?\d*(?![a-zA-Z])", RegexOptions.Compiled)) },
     };
 
-    // 服务组默认路由策略映射
-    public static IReadOnlyDictionary<string, string> GetServiceGroupMappings(string usGroup, string hkGroup, string mainGroup)
-    {
-        return new Dictionary<string, string>
-        {
-            { ServiceGroupNames.Spotify, usGroup },
-            { ServiceGroupNames.Steam, hkGroup },
-            { ServiceGroupNames.Ai, usGroup },
-            { ServiceGroupNames.Microsoft, hkGroup },
-            { ServiceGroupNames.Telegram, mainGroup },
-        };
-    }
+    // 核心聚变：将名称、回退策略、路由规则三合一
+    public static readonly IReadOnlyList<ServiceDefinition> Services =
+    [
+        new("🎵 Spotify", RegionId.UnitedStates, ["geosite-spotify"]),
+        new("🎮 Steam", RegionId.HongKong, ["geosite-steam"]),
+        new("🤖 AI", RegionId.UnitedStates, ["geosite-category-ai-!cn"]),
+        new("🪟 Microsoft", RegionId.HongKong, ["geosite-microsoft"]),
+        // Telegram 融合了 geosite 和 geoip，直接放在同一个列表里即可
+        new("✈️ Telegram", null, ["geosite-telegram", "geoip-telegram"]) 
+    ];
 }

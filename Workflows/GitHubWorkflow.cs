@@ -55,7 +55,7 @@ public static class GitHubWorkflow
             var result = ConversionService.Convert(yamlContent, platform, appSettings);
 
             // 替换为实例调用 appSettings
-            File.WriteAllText(appSettings.LocalOutputFile, result.JsonContent);
+            await File.WriteAllTextAsync(appSettings.LocalOutputFile, result.JsonContent);
             Console.WriteLine($"[SUCCESS] {displayName} ({platform}) -> {appSettings.LocalOutputFile}");
         }
         catch (Exception ex)

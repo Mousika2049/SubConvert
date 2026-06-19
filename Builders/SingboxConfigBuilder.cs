@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using SubConvert.Configuration;
 using SubConvert.Models;
 using SubConvert.Models.Clash;
@@ -25,6 +26,8 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
         public HashSet<string> ProxyServerDomains { get; } = [];
         public List<string> AllNodeNames { get; } = [];
         public List<string> FinalRegionGroupNames { get; } = [];
+        // 记录逻辑 ID 到实际生成的显示名的映射
+        public Dictionary<RegionId, string> GeneratedRegions { get; } = [];
 
         public Outbound? DirectOutbound { get; set; }
         public List<Outbound> NodeOutbounds { get; } = [];
@@ -139,14 +142,19 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
 
     private void BuildRegionOutbounds(BuildContext ctx)
     {
-        foreach (var region in ProfileDefinitions.RegionRegexes)
+        foreach (var kvp in ProfileDefinitions.Regions)
         {
-            string groupName = region.Key;
-            var matchedNodes = ctx.AllNodeNames.Where(name => region.Value.IsMatch(name)).ToList();
+            RegionId regionId = kvp.Key;
+            string groupName = kvp.Value.DisplayName;
+            Regex pattern = kvp.Value.Pattern;
+
+            var matchedNodes = ctx.AllNodeNames.Where(name => pattern.IsMatch(name)).ToList();
 
             if (matchedNodes.Count >= 2)
             {
-                ctx.FinalRegionGroupNames.Add(groupName);
+                // 成功生成时，记录下这个 ID 对应的真实名称
+                ctx.GeneratedRegions[regionId] = groupName;
+                
                 ctx.RegionOutbounds.Add(new Outbound
                 {
                     Type = "selector",
@@ -161,7 +169,7 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
 
     private void BuildProxyGroups(BuildContext ctx)
     {
-        var mainGroupOptions = new List<string>(ctx.FinalRegionGroupNames);
+        var mainGroupOptions = new List<string>(ctx.GeneratedRegions.Values);
         mainGroupOptions.AddRange(ctx.AllNodeNames);
         mainGroupOptions.Add(_appSettings.Direct);
 
@@ -170,28 +178,33 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             Type = "selector",
             Tag = _appSettings.MainProxyGroup,
             Outbounds = mainGroupOptions,
-            Default = ctx.FinalRegionGroupNames.FirstOrDefault() ?? ctx.AllNodeNames.FirstOrDefault() ?? _appSettings.Direct,
+            Default = ctx.GeneratedRegions.Values.FirstOrDefault() ?? ctx.AllNodeNames.FirstOrDefault() ?? _appSettings.Direct,
             InterruptExistConnections = true
         });
 
         var serviceGroupOptions = new List<string> { _appSettings.MainProxyGroup };
-        serviceGroupOptions.AddRange(ctx.FinalRegionGroupNames);
+        serviceGroupOptions.AddRange(ctx.GeneratedRegions.Values);
         serviceGroupOptions.AddRange(ctx.AllNodeNames);
         serviceGroupOptions.Add(_appSettings.Direct);
 
-        string usGroup = ctx.FinalRegionGroupNames.FirstOrDefault(n => n.Contains("🇺🇸")) ?? _appSettings.MainProxyGroup;
-        string hkGroup = ctx.FinalRegionGroupNames.FirstOrDefault(n => n.Contains("🇭🇰")) ?? _appSettings.MainProxyGroup;
-
-        var specialGroups = ProfileDefinitions.GetServiceGroupMappings(usGroup, hkGroup, _appSettings.MainProxyGroup);
-
-        ctx.ServiceOutbounds.AddRange(specialGroups.Select(group => new Outbound
+        // 自动化生成服务出站组
+        foreach (var service in ProfileDefinitions.Services)
         {
-            Type = "selector",
-            Tag = group.Key,
-            Outbounds = serviceGroupOptions,
-            Default = group.Value,
-            InterruptExistConnections = true
-        }));
+            string defaultSelection = _appSettings.MainProxyGroup;
+            if (service.DefaultRegion.HasValue && ctx.GeneratedRegions.TryGetValue(service.DefaultRegion.Value, out string? generatedRegionName))
+            {
+                defaultSelection = generatedRegionName;
+            }
+
+            ctx.ServiceOutbounds.Add(new Outbound
+            {
+                Type = "selector",
+                Tag = service.Name,
+                Outbounds = serviceGroupOptions,
+                Default = defaultSelection,
+                InterruptExistConnections = true
+            });
+        }
     }
 
     private void BuildDns(BuildContext ctx)
@@ -229,9 +242,9 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             CreateRemoteRuleSet("geoip-telegram", "geoip", "telegram"),
         ]);
 
-        ctx.Route.Rules.AddRange([
-            new RouteRule
-            {
+        var rules = new List<RouteRule>
+        {
+            new() {
                 Type = "logical",
                 Mode = "and",
                 Rules =
@@ -246,24 +259,38 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
                 ],
                 Action = "hijack-dns"
             },
-            new RouteRule { IpIsPrivate = true, Action = "route", Outbound = _appSettings.Direct },
-            new RouteRule { IpCidr = ["::/0"], Action = "reject" },
-            new RouteRule { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = _appSettings.Direct },
-            new RouteRule { Port = [3478, 3479, 19302, 19303], Network = ["udp"], Action = "reject" },
-            new RouteRule { Inbound = ["tun-in", "mixed-in"], Port = [443], Network = ["udp"], Action = "reject" },
-            new RouteRule { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
-            new RouteRule { Protocol = ["ssh"], Action = "route", Outbound = _appSettings.Direct },
-            new RouteRule { RuleSet = ["geosite-category-ads-all"], Action = "reject" },
-            new RouteRule { RuleSet = ["geosite-spotify"], Action = "route", Outbound = ServiceGroupNames.Spotify },
-            new RouteRule { RuleSet = ["geosite-steam"], Action = "route", Outbound = ServiceGroupNames.Steam },
-            new RouteRule { RuleSet = ["geosite-category-ai-!cn"], Action = "route", Outbound = ServiceGroupNames.Ai },
-            new RouteRule { RuleSet = ["geosite-microsoft"], Action = "route", Outbound = ServiceGroupNames.Microsoft },
-            new RouteRule { RuleSet = ["geosite-telegram"], Action = "route", Outbound = ServiceGroupNames.Telegram },
+            new() { IpIsPrivate = true, Action = "route", Outbound = _appSettings.Direct },
+            new() { IpCidr = ["::/0"], Action = "reject" },
+            new() { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = _appSettings.Direct },
+            new() { Port = [3478, 3479, 19302, 19303], Network = ["udp"], Action = "reject" },
+            new() { Inbound = ["tun-in", "mixed-in"], Port = [443], Network = ["udp"], Action = "reject" },
+            new() { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
+            new() { Protocol = ["ssh"], Action = "route", Outbound = _appSettings.Direct },
+            new() { RuleSet = ["geosite-category-ads-all"], Action = "reject" }
+        };
+
+        // 自动化织入服务分流规则
+        foreach (var service in ProfileDefinitions.Services)
+        {
+            if (service.RuleSets.Count > 0)
+            {
+                rules.Add(new() 
+                { 
+                    RuleSet = service.RuleSets, 
+                    Action = "route", 
+                    Outbound = service.Name 
+                });
+            }
+        }
+
+        // 添加剩余的基础直连和解析规则
+        rules.AddRange([
             new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = _appSettings.Direct },
             new RouteRule { Inbound = ["mixed-in"], Action = "resolve" },
-            new RouteRule { RuleSet = ["geoip-telegram"], Action = "route", Outbound = ServiceGroupNames.Telegram },
             new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = _appSettings.Direct }
         ]);
+
+        ctx.Route.Rules.AddRange(rules);
     }
 
     private SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName) => new()

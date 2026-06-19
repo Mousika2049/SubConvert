@@ -9,10 +9,13 @@ public class TrojanConverter : IProxyConverter
 
     public Outbound Convert(Dictionary<string, object> p)
     {
-        string name = p["name"].ToString()!;
-        string server = p["server"].ToString()!;
-        int port = int.Parse(p["port"].ToString()!);
-        
+        string name   = p.TryGetValue("name",   out var n) ? n.ToString()! : "unknown-trojan";
+        string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";
+        if (!p.TryGetValue("port", out var pt) || !int.TryParse(pt.ToString(), out int port))
+        {
+            return null; // 跳过无效节点，不崩溃整个转换
+        }
+
         // Trojan 默认 forceTls = true
         OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
         return new Outbound
