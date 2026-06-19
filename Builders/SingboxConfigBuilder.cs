@@ -107,9 +107,8 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
 
     private void BuildDirectOutbound(BuildContext ctx)
     {
-        ctx.DirectOutbound = new Outbound
+        ctx.DirectOutbound = new DirectOutbound
         {
-            Type = "direct",
             Tag = _appSettings.Direct,
             DomainResolver = "local"
         };
@@ -127,16 +126,18 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
             var converter = _converters.FirstOrDefault(c => c.CanHandle(type));
             if (converter == null) continue;
 
-            Outbound outbound = converter.Convert(p);
+            // 接收转换器返回的 ProxyOutbound
+            ProxyOutbound outbound = converter.Convert(p); 
             if (outbound == null) continue;
 
             if (!string.IsNullOrEmpty(outbound.Tag))
                 ctx.AllNodeNames.Add(outbound.Tag);
             
+            // 因为是 ProxyOutbound，所以必然包含 Server 属性，不再会有编译问题
             if (!string.IsNullOrEmpty(outbound.Server) && !IPAddress.TryParse(outbound.Server, out _))
                 ctx.ProxyServerDomains.Add(outbound.Server);
 
-            ctx.NodeOutbounds.Add(outbound);
+            ctx.NodeOutbounds.Add(outbound); // 完美向上转型为基类 Outbound 加入 List
         }
     }
 
@@ -155,9 +156,8 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
                 // 成功生成时，记录下这个 ID 对应的真实名称
                 ctx.GeneratedRegions[regionId] = groupName;
                 
-                ctx.RegionOutbounds.Add(new Outbound
+                ctx.RegionOutbounds.Add(new SelectorOutbound
                 {
-                    Type = "selector",
                     Tag = groupName,
                     Outbounds = matchedNodes,
                     Default = matchedNodes.FirstOrDefault(),
@@ -173,9 +173,8 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
         mainGroupOptions.AddRange(ctx.AllNodeNames);
         mainGroupOptions.Add(_appSettings.Direct);
 
-        ctx.MainOutbounds.Add(new Outbound
+        ctx.MainOutbounds.Add(new SelectorOutbound
         {
-            Type = "selector",
             Tag = _appSettings.MainProxyGroup,
             Outbounds = mainGroupOptions,
             Default = ctx.GeneratedRegions.Values.FirstOrDefault() ?? ctx.AllNodeNames.FirstOrDefault() ?? _appSettings.Direct,
@@ -196,9 +195,8 @@ public class SingboxConfigBuilder(TargetPlatform platform, IEnumerable<IProxyCon
                 defaultSelection = generatedRegionName;
             }
 
-            ctx.ServiceOutbounds.Add(new Outbound
+            ctx.ServiceOutbounds.Add(new SelectorOutbound
             {
-                Type = "selector",
                 Tag = service.Name,
                 Outbounds = serviceGroupOptions,
                 Default = defaultSelection,

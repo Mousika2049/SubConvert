@@ -7,7 +7,7 @@ public class Hysteria2Converter : IProxyConverter
 {
     public bool CanHandle(string proxyType) => proxyType == "hysteria2";
 
-    public Outbound Convert(Dictionary<string, object> p)
+    public ProxyOutbound Convert(Dictionary<string, object> p)
     {
         string name = p.TryGetValue("name", out var n) ? n.ToString()! : "unknown-hy2";
         string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";
@@ -53,9 +53,8 @@ public class Hysteria2Converter : IProxyConverter
         OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
 
         // 5. 拼装为标准 Outbound，抛给上层的 Builder
-        return new Outbound
+        return new Hysteria2Outbound
         {
-            Type = "hysteria2",
             Tag = name,
             Server = server,
             ServerPort = serverPort,

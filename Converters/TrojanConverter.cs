@@ -7,7 +7,7 @@ public class TrojanConverter : IProxyConverter
 {
     public bool CanHandle(string proxyType) => proxyType == "trojan";
 
-    public Outbound Convert(Dictionary<string, object> p)
+    public ProxyOutbound Convert(Dictionary<string, object> p)
     {
         string name   = p.TryGetValue("name",   out var n) ? n.ToString()! : "unknown-trojan";
         string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";
@@ -18,9 +18,8 @@ public class TrojanConverter : IProxyConverter
 
         // Trojan 默认 forceTls = true
         OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
-        return new Outbound
+        return new TrojanOutbound
         {
-            Type = "trojan",
             Tag = name,
             Server = server,
             ServerPort = port,
