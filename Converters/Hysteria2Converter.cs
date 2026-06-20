@@ -1,3 +1,4 @@
+using SubConvert.Models;
 using SubConvert.Models.Singbox;
 using SubConvert.Helpers;
 
@@ -7,38 +8,52 @@ public class Hysteria2Converter : IProxyConverter
 {
     public bool CanHandle(string proxyType) => proxyType == "hysteria2";
 
-    public ProxyOutbound Convert(Dictionary<string, object> p)
+    public NodeConversionResult Convert(Dictionary<string, object> p)
     {
-        string name = p.TryGetValue("name", out var n) ? n.ToString()! : "unknown-hy2";
-        string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";
+        string name = p.TryGetValue("name", out var nObj) && !string.IsNullOrWhiteSpace(nObj.ToString()) 
+            ? nObj.ToString()!.Trim() : "Unknown-HY2-Node";
 
-        // 1. 解析端口：兼顾常规端口与 Hysteria2 的端口跳跃
+        if (!p.TryGetValue("server", out var sObj) || string.IsNullOrWhiteSpace(sObj.ToString()))
+            return NodeConversionResult.Fail($"Hysteria2 节点 '{name}' 缺失必填字段或为空: server");
+        string server = sObj.ToString()!.Trim();
+
+        // 优先解析 ports（端口跳跃特性优先级最高）
         int? serverPort = null;
         List<string>? serverPorts = null;
 
-        if (p.TryGetValue("port", out var pt) && int.TryParse(pt.ToString(), out int parsedPort))
+        if (p.TryGetValue("ports", out var ptsObj) && !string.IsNullOrWhiteSpace(ptsObj.ToString()))
         {
-            serverPort = parsedPort;
-        }
-        else if (p.TryGetValue("ports", out var pts))
-        {
-            string portsStr = pts.ToString()!;
-            // 如果包含连字符，说明是跳跃范围（Sing-box 支持 ["20000-50000"] 这样的字符串数组）
+            string portsStr = ptsObj.ToString()!.Trim();
+            
+            // 如果包含连字符或逗号，说明是真正的跳跃端口，赋值给 serverPorts
             if (portsStr.Contains('-') || portsStr.Contains(','))
             {
                 serverPorts = [portsStr];
             }
-            else if (int.TryParse(portsStr, out int singlePort))
+            // 边缘情况兜底：如果机场在 ports 字段里只写了一个纯数字，降级解析为 serverPort
+            else if (int.TryParse(portsStr, out int singlePort) && singlePort > 0 && singlePort <= 65535)
             {
                 serverPort = singlePort;
             }
         }
+        // 只有在 ports 完全不存在或无内容时，才去读取旧版的 port 字段
+        else if (p.TryGetValue("port", out var ptObj) && int.TryParse(ptObj.ToString(), out int parsedPort) && parsedPort > 0 && parsedPort <= 65535)
+        {
+            serverPort = parsedPort;
+        }
 
-        // 2. 解析限速（提取 "100 Mbps" 中的数字部分 100）
+        // 如果两个都没解析成功，抛出明确的错误
+        if (serverPort == null && serverPorts == null)
+        {
+            return NodeConversionResult.Fail($"Hysteria2 节点 '{name}' 缺失必填字段或端口格式无效 (需 port 或 ports)");
+        }
+
+        if (!p.TryGetValue("password", out var pwdObj) || string.IsNullOrWhiteSpace(pwdObj.ToString()))
+            return NodeConversionResult.Fail($"Hysteria2 节点 '{name}' 缺失必填字段或为空: password");
+
         int? up = ParseSpeed(p, "up");
         int? down = ParseSpeed(p, "down");
 
-        // 3. 解析混淆配置
         OutboundObfs? obfsConfig = null;
         if (p.TryGetValue("obfs", out var obfsType) && p.TryGetValue("obfs-password", out var obfsPwd))
         {
@@ -49,40 +64,31 @@ public class Hysteria2Converter : IProxyConverter
             };
         }
 
-        // 4. 解析 TLS (Hysteria2 原生必须有 TLS)
         OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
 
-        // 5. 拼装为标准 Outbound，抛给上层的 Builder
-        return new Hysteria2Outbound
+        return NodeConversionResult.Success(new Hysteria2Outbound
         {
             Tag = name,
             Server = server,
-            ServerPort = serverPort,
+            ServerPort = serverPort ?? 0,
             ServerPorts = serverPorts,
             DomainResolver = "node-resolver",
             ConnectTimeout = "5s",
-            Password = p.TryGetValue("password", out var pwd) ? pwd.ToString() : "",
+            Password = pwdObj.ToString()!.Trim(),
             UpMbps = up,
             DownMbps = down,
             Obfs = obfsConfig,
             Tls = tlsConfig
-        };
+        });
     }
 
-    /// <summary>
-    /// 从 "100 Mbps" 等字符串中安全提取出数值类型
-    /// </summary>
     private int? ParseSpeed(Dictionary<string, object> p, string key)
     {
         if (p.TryGetValue(key, out var val))
         {
             string str = val.ToString()!;
-            // 剔除字母和空格，仅保留数字进行转换
-            string digits = new(str.Where(char.IsDigit).ToArray());
-            if (int.TryParse(digits, out int speed))
-            {
-                return speed;
-            }
+            string digits = new string(str.Where(char.IsDigit).ToArray());
+            if (int.TryParse(digits, out int speed)) return speed;
         }
         return null;
     }

@@ -1,3 +1,4 @@
+using SubConvert.Models;
 using SubConvert.Models.Singbox;
 using SubConvert.Helpers;
 
@@ -7,26 +8,38 @@ public class TrojanConverter : IProxyConverter
 {
     public bool CanHandle(string proxyType) => proxyType == "trojan";
 
-    public ProxyOutbound Convert(Dictionary<string, object> p)
+    public NodeConversionResult Convert(Dictionary<string, object> p)
     {
-        string name   = p.TryGetValue("name",   out var n) ? n.ToString()! : "unknown-trojan";
-        string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";    
-        if (!p.TryGetValue("port", out var pt) || !int.TryParse(pt.ToString(), out int port))
-        {
-            return null; // 跳过无效节点，不崩溃整个转换
-        }
+        // 1. 提取名称 (提供 Fallback，防止报错时连名字都打不出来)
+        string name = p.TryGetValue("name", out var nObj) && !string.IsNullOrWhiteSpace(nObj.ToString()) 
+            ? nObj.ToString()!.Trim() 
+            : "Unknown-Trojan-Node";
 
-        // Trojan 默认 forceTls = true
+        // 2. 必填项：Server
+        if (!p.TryGetValue("server", out var sObj) || string.IsNullOrWhiteSpace(sObj.ToString()))
+            return NodeConversionResult.Fail($"Trojan 节点 '{name}' 缺失必填字段或为空: server");
+        string server = sObj.ToString()!.Trim();
+
+        // 3. 必填项：Port (必须存在且能转为合法端口)
+        if (!p.TryGetValue("port", out var pObj) || !int.TryParse(pObj.ToString(), out int port) || port <= 0 || port > 65535)
+            return NodeConversionResult.Fail($"Trojan 节点 '{name}' 缺失必填字段或端口格式无效: port");
+
+        // 4. 必填项：Password
+        if (!p.TryGetValue("password", out var pwdObj) || string.IsNullOrWhiteSpace(pwdObj.ToString()))
+            return NodeConversionResult.Fail($"Trojan 节点 '{name}' 缺失必填字段或为空: password");
+        string password = pwdObj.ToString()!.Trim();
+
         OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
-        return new TrojanOutbound
+
+        return NodeConversionResult.Success(new TrojanOutbound
         {
             Tag = name,
             Server = server,
             ServerPort = port,
             DomainResolver = "node-resolver",
             ConnectTimeout = "5s",
-            Password = p.TryGetValue("password", out var pwd) ? pwd.ToString() : "",
+            Password = password,
             Tls = tlsConfig
-        };
+        });
     }
 }

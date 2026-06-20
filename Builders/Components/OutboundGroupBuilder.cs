@@ -39,9 +39,21 @@ public class OutboundGroupBuilder(
             var converter = converters.FirstOrDefault(c => c.CanHandle(type));
             if (converter == null) continue;
 
-            // 契约强制返回包含 Server 属性的 ProxyOutbound
-            ProxyOutbound outbound = converter.Convert(p);
-            if (outbound == null) continue;
+            // 🚀 核心改动：获取校验结果
+            var result = converter.Convert(p);
+            
+            // 优雅降级：如果失败，只打印日志，不中断程序，直接跳过处理下一个
+            if (!result.IsSuccess)
+            {
+                // 可以使用黄色的警告字体来引起用户的注意
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"[WARNING] 跳过无效节点 -> {result.ErrorMessage}");
+                Console.ResetColor();
+                continue;
+            }
+
+            // 安全解包，走到这里肯定不为空
+            ProxyOutbound outbound = result.Outbound!;
 
             if (!string.IsNullOrEmpty(outbound.Tag))
                 ctx.AllNodeNames.Add(outbound.Tag);
