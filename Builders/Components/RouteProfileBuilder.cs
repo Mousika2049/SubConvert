@@ -1,0 +1,82 @@
+using SubConvert.Configuration;
+using SubConvert.Models.Singbox;
+
+namespace SubConvert.Builders.Components;
+
+public class RouteProfileBuilder(AppSettings appSettings) : IConfigComponentBuilder
+{
+    public void Build(BuildContext ctx)
+    {
+        ctx.Route.RuleSet.AddRange([
+            CreateRemoteRuleSet("geosite-category-ads-all", "geosite", "category-ads-all"),
+            CreateRemoteRuleSet("geosite-category-pt", "geosite", "category-pt"),
+            CreateRemoteRuleSet("geosite-cn", "geosite", "cn"),
+            CreateRemoteRuleSet("geoip-cn", "geoip", "cn"),
+            CreateRemoteRuleSet("geosite-spotify", "geosite", "spotify"),
+            CreateRemoteRuleSet("geosite-steam", "geosite", "steam"),
+            CreateRemoteRuleSet("geosite-category-ai-!cn", "geosite", "category-ai-!cn"),
+            CreateRemoteRuleSet("geosite-microsoft", "geosite", "microsoft"),
+            CreateRemoteRuleSet("geosite-telegram", "geosite", "telegram"),
+            CreateRemoteRuleSet("geoip-telegram", "geoip", "telegram")
+        ]);
+
+        var rules = new List<RouteRule>
+        {
+            new() {
+                Type = "logical",
+                Mode = "and",
+                Rules =
+                [
+                    new RouteRule { Inbound = ["tun-in", "mixed-in"] },
+                    new RouteRule
+                    {
+                        Type = "logical",
+                        Mode = "or",
+                        Rules = [ new RouteRule { Protocol = ["dns"] }, new RouteRule { Port = [53] } ]
+                    }
+                ],
+                Action = "hijack-dns"
+            },
+            new() { IpIsPrivate = true, Action = "route", Outbound = appSettings.Direct },
+            new() { IpCidr = ["::/0"], Action = "reject" },
+            new() { IpCidr = ["223.5.5.5/32"], Action = "route", Outbound = appSettings.Direct },
+            new() { Port = [3478, 3479, 19302, 19303], Network = ["udp"], Action = "reject" },
+            new() { Inbound = ["tun-in", "mixed-in"], Port = [443], Network = ["udp"], Action = "reject" },
+            new() { Inbound = ["tun-in", "mixed-in"], Action = "sniff", Timeout = "300ms" },
+            new() { Protocol = ["ssh"], Action = "route", Outbound = appSettings.Direct },
+            new() { RuleSet = ["geosite-category-ads-all"], Action = "reject" }
+        };
+
+        // 数据驱动：自动化织入服务分流规则
+        foreach (var service in ProfileDefinitions.Services)
+        {
+            if (service.RuleSets.Count > 0)
+            {
+                rules.Add(new RouteRule 
+                { 
+                    RuleSet = service.RuleSets, 
+                    Action = "route", 
+                    Outbound = service.Name 
+                });
+            }
+        }
+
+        rules.AddRange([
+            new RouteRule { RuleSet = ["geosite-cn", "geosite-category-pt"], Action = "route", Outbound = appSettings.Direct },
+            new RouteRule { Inbound = ["mixed-in"], Action = "resolve" },
+            new RouteRule { RuleSet = ["geoip-cn"], Action = "route", Outbound = appSettings.Direct }
+        ]);
+
+        ctx.Route.Rules.AddRange(rules);
+    }
+
+    private SingboxRuleSet CreateRemoteRuleSet(string tag, string repoType, string fileName) => new()
+    {
+        Tag = tag,
+        Type = "remote",
+        Format = "binary",
+        Url = $"https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/{repoType}/{fileName}.srs",
+        DownloadDetour = appSettings.Direct,
+        UpdateInterval = "1d"
+    };
+}

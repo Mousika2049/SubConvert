@@ -10,7 +10,7 @@ public class TrojanConverter : IProxyConverter
     public ProxyOutbound Convert(Dictionary<string, object> p)
     {
         string name   = p.TryGetValue("name",   out var n) ? n.ToString()! : "unknown-trojan";
-        string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";
+        string server = p.TryGetValue("server", out var s) ? s.ToString()! : "";    
         if (!p.TryGetValue("port", out var pt) || !int.TryParse(pt.ToString(), out int port))
         {
             return null; // 跳过无效节点，不崩溃整个转换
