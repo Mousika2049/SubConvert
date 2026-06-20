@@ -50,7 +50,7 @@ public record VlessOutbound : ProxyOutbound
 public record TrojanOutbound : ProxyOutbound
 {
     [JsonPropertyName("password")] public required string Password { get; init; }
-    [JsonPropertyName("tls")] public required OutboundTls Tls { get; init; }
+    [JsonPropertyName("tls")] public OutboundTls? Tls { get; init; }
 }
 
 public record Hysteria2Outbound : ProxyOutbound

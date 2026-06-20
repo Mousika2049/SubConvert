@@ -1,6 +1,8 @@
 using SubConvert.Models;
 using SubConvert.Models.Singbox;
 using SubConvert.Helpers;
+using SubConvert.Extensions;
+using SubConvert.Exceptions;
 
 namespace SubConvert.Converters;
 
@@ -10,86 +12,56 @@ public class Hysteria2Converter : IProxyConverter
 
     public NodeConversionResult Convert(Dictionary<string, object> p)
     {
-        string name = p.TryGetValue("name", out var nObj) && !string.IsNullOrWhiteSpace(nObj.ToString()) 
-            ? nObj.ToString()!.Trim() : "Unknown-HY2-Node";
+        string name = p.GetString("name") ?? "Unknown-HY2-Node";
 
-        if (!p.TryGetValue("server", out var sObj) || string.IsNullOrWhiteSpace(sObj.ToString()))
-            return NodeConversionResult.Fail($"Hysteria2 节点 '{name}' 缺失必填字段或为空: server");
-        string server = sObj.ToString()!.Trim();
-
-        // 优先解析 ports（端口跳跃特性优先级最高）
-        int? serverPort = null;
-        List<string>? serverPorts = null;
-
-        if (p.TryGetValue("ports", out var ptsObj) && !string.IsNullOrWhiteSpace(ptsObj.ToString()))
+        try
         {
-            string portsStr = ptsObj.ToString()!.Trim();
-            
-            // 如果包含连字符或逗号，说明是真正的跳跃端口，赋值给 serverPorts
-            if (portsStr.Contains('-') || portsStr.Contains(','))
+            string server = p.GetRequiredString("server");
+
+            // 解析跳跃端口逻辑
+            int? serverPort = null;
+            List<string>? serverPorts = null;
+
+            string? portsStr = p.GetString("ports");
+            if (portsStr != null)
             {
-                serverPorts = [portsStr];
+                if (portsStr.Contains('-') || portsStr.Contains(',')) serverPorts = [portsStr];
+                else if (int.TryParse(portsStr, out int singlePort)) serverPort = singlePort;
             }
-            // 边缘情况兜底：如果机场在 ports 字段里只写了一个纯数字，降级解析为 serverPort
-            else if (int.TryParse(portsStr, out int singlePort) && singlePort > 0 && singlePort <= 65535)
+            else
             {
-                serverPort = singlePort;
+                serverPort = p.GetInt("port");
             }
-        }
-        // 只有在 ports 完全不存在或无内容时，才去读取旧版的 port 字段
-        else if (p.TryGetValue("port", out var ptObj) && int.TryParse(ptObj.ToString(), out int parsedPort) && parsedPort > 0 && parsedPort <= 65535)
-        {
-            serverPort = parsedPort;
-        }
 
-        // 如果两个都没解析成功，抛出明确的错误
-        if (serverPort == null && serverPorts == null)
-        {
-            return NodeConversionResult.Fail($"Hysteria2 节点 '{name}' 缺失必填字段或端口格式无效 (需 port 或 ports)");
-        }
+            if (serverPort == null && serverPorts == null)
+                throw new NodeParseException("未找到有效端口 (需配置 port 或 ports)");
 
-        if (!p.TryGetValue("password", out var pwdObj) || string.IsNullOrWhiteSpace(pwdObj.ToString()))
-            return NodeConversionResult.Fail($"Hysteria2 节点 '{name}' 缺失必填字段或为空: password");
-
-        int? up = ParseSpeed(p, "up");
-        int? down = ParseSpeed(p, "down");
-
-        OutboundObfs? obfsConfig = null;
-        if (p.TryGetValue("obfs", out var obfsType) && p.TryGetValue("obfs-password", out var obfsPwd))
-        {
-            obfsConfig = new OutboundObfs
+            // 组装混淆配置 (可选)
+            OutboundObfs? obfsConfig = null;
+            string? obfsType = p.GetString("obfs");
+            if (obfsType != null)
             {
-                Type = obfsType.ToString(),
-                Password = obfsPwd.ToString()
-            };
+                obfsConfig = new OutboundObfs { Type = obfsType, Password = p.GetString("obfs-password") };
+            }
+
+            return NodeConversionResult.Success(new Hysteria2Outbound
+            {
+                Tag = name,
+                Server = server,
+                ServerPort = serverPort,
+                ServerPorts = serverPorts,
+                UpMbps = p.GetSpeedMbps("up"),
+                DownMbps = p.GetSpeedMbps("down"),
+                Obfs = obfsConfig,
+                Password = p.GetRequiredString("password"),
+                Tls = TlsConfigHelper.Extract(p, server, forceTls: true),
+                DomainResolver = "node-resolver",
+                ConnectTimeout = "5s"                                                
+            });
         }
-
-        OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
-
-        return NodeConversionResult.Success(new Hysteria2Outbound
+        catch (NodeParseException ex)
         {
-            Tag = name,
-            Server = server,
-            ServerPort = serverPort,
-            ServerPorts = serverPorts,
-            DomainResolver = "node-resolver",
-            ConnectTimeout = "5s",
-            Password = pwdObj.ToString()!.Trim(),
-            UpMbps = up,
-            DownMbps = down,
-            Obfs = obfsConfig,
-            Tls = tlsConfig
-        });
-    }
-
-    private int? ParseSpeed(Dictionary<string, object> p, string key)
-    {
-        if (p.TryGetValue(key, out var val))
-        {
-            string str = val.ToString()!;
-            string digits = new string(str.Where(char.IsDigit).ToArray());
-            if (int.TryParse(digits, out int speed)) return speed;
+            return NodeConversionResult.Fail($"Hysteria2 节点 '{name}' 解析失败 -> {ex.Message}");
         }
-        return null;
     }
 }
