@@ -1,10 +1,12 @@
 using SubConvert.Configuration;
 using SubConvert.Models.Singbox;
+using Microsoft.Extensions.Options;
 
 namespace SubConvert.Builders.Components;
 
-public class DnsProfileBuilder(AppSettings appSettings) : IConfigComponentBuilder
+public class DnsProfileBuilder(IOptions<AppSettings> options) : IConfigComponentBuilder
 {
+    private readonly AppSettings appSettings = options.Value;
     public void Build(BuildContext ctx)
     {
         ctx.Dns.Servers.AddRange([

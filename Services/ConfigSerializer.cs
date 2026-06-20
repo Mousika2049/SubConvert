@@ -7,21 +7,28 @@ using SubConvert.Models.Singbox;
 
 namespace SubConvert.Services;
 
-public static class ConfigSerializer
+public interface IConfigSerializer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    string Serialize(SingboxConfig config);
+    string GetContentHash(string content);
+}
+
+// 移除 static，实现接口
+public class ConfigSerializer : IConfigSerializer
+{
+    private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public static string Serialize(SingboxConfig config)
+    public string Serialize(SingboxConfig config)
     {
-        return JsonSerializer.Serialize(config, JsonOptions);
+        return JsonSerializer.Serialize(config, _jsonOptions);
     }
 
-    public static string GetContentHash(string content)
+    public string GetContentHash(string content)
     {
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(hashBytes)[..8].ToLower();

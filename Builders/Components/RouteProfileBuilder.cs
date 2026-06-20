@@ -1,10 +1,13 @@
 using SubConvert.Configuration;
 using SubConvert.Models.Singbox;
+using Microsoft.Extensions.Options;
 
 namespace SubConvert.Builders.Components;
 
-public class RouteProfileBuilder(AppSettings appSettings) : IConfigComponentBuilder
+public class RouteProfileBuilder(IOptions<AppSettings> options) : IConfigComponentBuilder
 {
+    private readonly AppSettings appSettings = options.Value;
+
     public void Build(BuildContext ctx)
     {
         ctx.Route.RuleSet.AddRange([

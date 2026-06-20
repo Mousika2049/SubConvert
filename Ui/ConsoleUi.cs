@@ -1,19 +1,30 @@
 using System.Text;
+using Microsoft.Extensions.Logging;
 using SubConvert.Models;
 
 namespace SubConvert.Ui;
 
-public static class ConsoleUi
+// 1. 提取 UI 抽象接口
+public interface IUserInterface
 {
-    public static string RequireInput(string envVar, string prompt, bool secret = false)
+    string RequireInput(string envVar, string prompt, bool secret = false);
+    TargetPlatform SelectPlatform();
+    int SelectAirport(List<(string DisplayName, string RepoPath)> files);
+}
+
+// 2. 实现控制台版本的 UI（移除 static，注入 Logger）
+public class ConsoleUi(ILogger<ConsoleUi> logger) : IUserInterface
+{
+    public string RequireInput(string envVar, string prompt, bool secret = false)
     {
         string? value = Environment.GetEnvironmentVariable(envVar);
         if (!string.IsNullOrWhiteSpace(value))
         {
-            Console.WriteLine($"[INFO] 已从环境变量 {envVar} 读取配置。");
+            logger.LogInformation("已从环境变量 {EnvVar} 读取配置。", envVar);
             return value.Trim();
         }
 
+        // UI 交互的提示信息依然保留 Console.Write
         Console.Write(prompt);
         if (secret)
         {
@@ -33,7 +44,7 @@ public static class ConsoleUi
         return Console.ReadLine()?.Trim() ?? "";
     }
 
-    public static TargetPlatform SelectPlatform()
+    public TargetPlatform SelectPlatform()
     {
         Console.WriteLine("\n请选择要生成配置的平台：");
         Console.WriteLine("1. Windows");
@@ -47,11 +58,11 @@ public static class ConsoleUi
             "3" => TargetPlatform.Linux,
             _ => TargetPlatform.Windows
         };
-        Console.WriteLine($"[INFO] 目标平台：{platform}");
+        logger.LogInformation("目标平台：{Platform}", platform);
         return platform;
     }
 
-    public static int SelectAirport(List<(string DisplayName, string RepoPath)> files)
+    public int SelectAirport(List<(string DisplayName, string RepoPath)> files)
     {
         Console.WriteLine("\n请选择要处理的机场配置：");
         for (int i = 0; i < files.Count; i++)

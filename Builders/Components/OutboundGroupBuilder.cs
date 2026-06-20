@@ -1,15 +1,20 @@
 using System.Net;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options; // 新增
 using SubConvert.Configuration;
 using SubConvert.Converters;
-using SubConvert.Models;
 using SubConvert.Models.Singbox;
 
 namespace SubConvert.Builders.Components;
 
+// 注入 IOptions 和 ILogger
 public class OutboundGroupBuilder(
     IEnumerable<IProxyConverter> converters, 
-    AppSettings appSettings) : IConfigComponentBuilder
+    IOptions<AppSettings> options, 
+    ILogger<OutboundGroupBuilder> logger) : IConfigComponentBuilder
 {
+    private readonly AppSettings _appSettings = options.Value;
+
     public void Build(BuildContext ctx)
     {
         BuildDirectOutbound(ctx);
@@ -20,47 +25,29 @@ public class OutboundGroupBuilder(
 
     private void BuildDirectOutbound(BuildContext ctx)
     {
-        ctx.DirectOutbound = new DirectOutbound
-        {
-            Tag = appSettings.Direct,
-            DomainResolver = "local"
-        };
+        ctx.DirectOutbound = new DirectOutbound { Tag = _appSettings.Direct, DomainResolver = "local" };
     }
 
     private void BuildProxyNodes(BuildContext ctx)
     {
         if (ctx.RawClashConfig?.Proxies == null) return;
-
         foreach (var p in ctx.RawClashConfig.Proxies)
         {
             if (!p.TryGetValue("type", out var typeObj)) continue;
-            string type = typeObj.ToString()!;
-
-            var converter = converters.FirstOrDefault(c => c.CanHandle(type));
+            var converter = converters.FirstOrDefault(c => c.CanHandle(typeObj.ToString()!));
             if (converter == null) continue;
 
-            // 核心改动：获取校验结果
             var result = converter.Convert(p);
-            
-            // 优雅降级：如果失败，只打印日志，不中断程序，直接跳过处理下一个
             if (!result.IsSuccess)
             {
-                // 可以使用黄色的警告字体来引起用户的注意
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"[WARNING] 跳过无效节点 -> {result.ErrorMessage}");
-                Console.ResetColor();
+                logger.LogWarning("跳过无效节点 -> {ErrorMessage}", result.ErrorMessage);
                 continue;
             }
 
-            // 安全解包，走到这里肯定不为空
             ProxyOutbound outbound = result.Outbound!;
-
-            if (!string.IsNullOrEmpty(outbound.Tag))
-                ctx.AllNodeNames.Add(outbound.Tag);
-            
+            if (!string.IsNullOrEmpty(outbound.Tag)) ctx.AllNodeNames.Add(outbound.Tag);
             if (!string.IsNullOrEmpty(outbound.Server) && !IPAddress.TryParse(outbound.Server, out _))
                 ctx.ProxyServerDomains.Add(outbound.Server);
-
             ctx.NodeOutbounds.Add(outbound);
         }
     }
@@ -69,20 +56,13 @@ public class OutboundGroupBuilder(
     {
         foreach (var kvp in ProfileDefinitions.Regions)
         {
-            RegionId regionId = kvp.Key;
-            string groupName = kvp.Value.DisplayName;
-            var pattern = kvp.Value.Pattern;
-
-            var matchedNodes = ctx.AllNodeNames.Where(name => pattern.IsMatch(name)).ToList();
-
+            var matchedNodes = ctx.AllNodeNames.Where(name => kvp.Value.Pattern.IsMatch(name)).ToList();
             if (matchedNodes.Count >= 2)
             {
-                // 记录逻辑 ID 到实际生成的显示名的映射
-                ctx.GeneratedRegions[regionId] = groupName;
-                
+                ctx.GeneratedRegions[kvp.Key] = kvp.Value.DisplayName;
                 ctx.RegionOutbounds.Add(new SelectorOutbound
                 {
-                    Tag = groupName,
+                    Tag = kvp.Value.DisplayName,
                     Outbounds = matchedNodes,
                     Default = matchedNodes.FirstOrDefault(),
                     InterruptExistConnections = true
@@ -95,29 +75,26 @@ public class OutboundGroupBuilder(
     {
         var mainGroupOptions = new List<string>(ctx.GeneratedRegions.Values);
         mainGroupOptions.AddRange(ctx.AllNodeNames);
-        mainGroupOptions.Add(appSettings.Direct);
+        mainGroupOptions.Add(_appSettings.Direct);
 
         ctx.MainOutbounds.Add(new SelectorOutbound
         {
-            Tag = appSettings.MainProxyGroup,
+            Tag = _appSettings.MainProxyGroup,
             Outbounds = mainGroupOptions,
-            Default = ctx.GeneratedRegions.Values.FirstOrDefault() ?? ctx.AllNodeNames.FirstOrDefault() ?? appSettings.Direct,
+            Default = ctx.GeneratedRegions.Values.FirstOrDefault() ?? ctx.AllNodeNames.FirstOrDefault() ?? _appSettings.Direct,
             InterruptExistConnections = true
         });
 
-        var serviceGroupOptions = new List<string> { appSettings.MainProxyGroup };
+        var serviceGroupOptions = new List<string> { _appSettings.MainProxyGroup };
         serviceGroupOptions.AddRange(ctx.GeneratedRegions.Values);
         serviceGroupOptions.AddRange(ctx.AllNodeNames);
-        serviceGroupOptions.Add(appSettings.Direct);
+        serviceGroupOptions.Add(_appSettings.Direct);
 
-        // 自动化生成服务出站组
         foreach (var service in ProfileDefinitions.Services)
         {
-            string defaultSelection = appSettings.MainProxyGroup;
+            string defaultSelection = _appSettings.MainProxyGroup;
             if (service.DefaultRegion.HasValue && ctx.GeneratedRegions.TryGetValue(service.DefaultRegion.Value, out string? generatedRegionName))
-            {
                 defaultSelection = generatedRegionName;
-            }
 
             ctx.ServiceOutbounds.Add(new SelectorOutbound
             {

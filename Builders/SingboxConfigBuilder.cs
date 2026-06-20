@@ -1,47 +1,37 @@
+using Microsoft.Extensions.Options;
 using SubConvert.Configuration;
-using SubConvert.Converters;
 using SubConvert.Models;
 using SubConvert.Models.Clash;
 using SubConvert.Models.Singbox;
-using SubConvert.Builders.Components;
 
 namespace SubConvert.Builders;
 
-public class SingboxConfigBuilder
+public interface ISingboxConfigBuilder
 {
-    private readonly IEnumerable<IConfigComponentBuilder> _pipeline;
-    private readonly AppSettings _appSettings;
+    SingboxConfig Build(ClashConfig clashConfig, TargetPlatform platform);
+}
 
-    public SingboxConfigBuilder(
-        TargetPlatform platform, 
-        IEnumerable<IProxyConverter> converters, 
-        AppSettings appSettings)
+// 注入流水线组件和配置
+public class SingboxConfigBuilder(
+    IEnumerable<IConfigComponentBuilder> pipeline, 
+    IOptions<AppSettings> options) : ISingboxConfigBuilder
+{
+    private readonly AppSettings _appSettings = options.Value;
+
+    public SingboxConfig Build(ClashConfig clashConfig, TargetPlatform platform)
     {
-        _appSettings = appSettings;
-
-        // 声明式定义工序流水线
-        _pipeline = new List<IConfigComponentBuilder>
-        {
-            new InboundBuilder(platform),
-            new OutboundGroupBuilder(converters, appSettings),
-            new DnsProfileBuilder(appSettings),
-            new RouteProfileBuilder(appSettings)
-        };
-    }
-
-    public SingboxConfig Build(ClashConfig clashConfig)
-    {
-        // 1. 开辟全新沙箱
+        // 1. 初始化带有动态参数的上下文
         var ctx = new BuildContext
         {
             RawClashConfig = clashConfig,
+            Platform = platform,
             Route = new RouteConfig { Final = _appSettings.MainProxyGroup }
         };
 
-        // 2. 流水线加工
-        foreach (var builder in _pipeline)
+        // 2. 执行 DI 容器提供的所有流水线组件
+        foreach (var component in pipeline)
         {
-            builder.Build(ctx);
+            component.Build(ctx);
         }
 
         // 3. 收割成品组装

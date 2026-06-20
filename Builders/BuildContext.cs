@@ -6,6 +6,9 @@ namespace SubConvert.Builders;
 
 public class BuildContext
 {
+    // ── 运行时动态参数 ──
+    public TargetPlatform Platform { get; init; } // 新增：将平台信息放入上下文
+
     // ── 最终产出数据源 ──
     public LogConfig Log { get; } = new();
     public DnsConfig Dns { get; } = new();

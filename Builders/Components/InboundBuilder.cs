@@ -3,10 +3,14 @@ using SubConvert.Models.Singbox;
 
 namespace SubConvert.Builders.Components;
 
-public class InboundBuilder(TargetPlatform platform) : IConfigComponentBuilder
+// 移除构造函数中的 platform 参数
+public class InboundBuilder : IConfigComponentBuilder
 {
     public void Build(BuildContext ctx)
     {
+        // 从上下文中读取运行时平台
+        var platform = ctx.Platform;
+
         ctx.Inbounds.Add(new Inbound
         {
             Type = "tun",
