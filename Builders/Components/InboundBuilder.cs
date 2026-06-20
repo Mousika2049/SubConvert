@@ -20,7 +20,7 @@ public class InboundBuilder(TargetPlatform platform) : IConfigComponentBuilder
                 TargetPlatform.Windows => "mixed",
                 TargetPlatform.Linux => "system",
                 TargetPlatform.Android => "system",
-                _ => null
+                _ => "system"
             },
             Mtu = 1400
         });

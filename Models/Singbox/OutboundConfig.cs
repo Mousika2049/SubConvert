@@ -19,7 +19,7 @@ public abstract record Outbound
 public record SelectorOutbound : Outbound
 {
     [JsonPropertyName("outbounds")] public required List<string> Outbounds { get; init; }
-    [JsonPropertyName("default")] public required string Default { get; init; }
+    [JsonPropertyName("default")] public string? Default { get; init; }
     [JsonPropertyName("interrupt_exist_connections")] public bool? InterruptExistConnections { get; init; }
 }
 
@@ -31,8 +31,9 @@ public record DirectOutbound : Outbound
 // ── 2. 代理节点基础抽象类 ─────────────────────────────────────────────────
 public abstract record ProxyOutbound : Outbound
 {
-    [JsonPropertyName("server")] public required string Server { get; init; }
-    [JsonPropertyName("server_port")] public required int ServerPort { get; init; }
+    [JsonPropertyName("server")] public required string Server { get; init; }   
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] 
+    [JsonPropertyName("server_port")] public int? ServerPort { get; init; }
     [JsonPropertyName("domain_resolver")] public required string DomainResolver { get; init; }
     [JsonPropertyName("connect_timeout")] public required string ConnectTimeout { get; init; }
 }
@@ -40,7 +41,7 @@ public abstract record ProxyOutbound : Outbound
 // ── 3. 具体代理协议类 (各自只拥有属于自己的字段) ──────────────────────────
 public record VlessOutbound : ProxyOutbound
 {
-    [JsonPropertyName("uuid")] public string? Uuid { get; init; }
+    [JsonPropertyName("uuid")] public required string Uuid { get; init; }
     [JsonPropertyName("flow")] public string? Flow { get; init; }
     [JsonPropertyName("packet_encoding")] public string? PacketEncoding { get; init; }
     [JsonPropertyName("tls")] public OutboundTls? Tls { get; init; }
@@ -86,7 +87,6 @@ public record OutboundReality
     [JsonPropertyName("short_id")] public required string ShortId { get; init; }
 }
 
-// 混淆配置模型
 public record OutboundObfs
 {
     [JsonPropertyName("type")] public string? Type { get; init; }

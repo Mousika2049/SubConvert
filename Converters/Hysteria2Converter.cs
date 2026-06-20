@@ -70,7 +70,7 @@ public class Hysteria2Converter : IProxyConverter
         {
             Tag = name,
             Server = server,
-            ServerPort = serverPort ?? 0,
+            ServerPort = serverPort,
             ServerPorts = serverPorts,
             DomainResolver = "node-resolver",
             ConnectTimeout = "5s",

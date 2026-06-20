@@ -29,7 +29,7 @@ public class TrojanConverter : IProxyConverter
             return NodeConversionResult.Fail($"Trojan 节点 '{name}' 缺失必填字段或为空: password");
         string password = pwdObj.ToString()!.Trim();
 
-        OutboundTls? tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
+        OutboundTls tlsConfig = TlsConfigHelper.Extract(p, server, forceTls: true);
 
         return NodeConversionResult.Success(new TrojanOutbound
         {

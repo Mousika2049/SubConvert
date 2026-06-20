@@ -4,7 +4,7 @@ namespace SubConvert.Helpers;
 
 public static class TlsConfigHelper
 {
-    public static OutboundTls? Extract(Dictionary<string, object> p, string server, bool forceTls = false)
+    public static OutboundTls Extract(Dictionary<string, object> p, string server, bool forceTls = false)
     {
         bool isTls = p.TryGetValue("tls", out var tlsObj) && bool.TryParse(tlsObj.ToString(), out var b) && b;
         bool isReality = p.ContainsKey("reality-opts");

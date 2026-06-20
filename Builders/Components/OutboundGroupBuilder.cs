@@ -39,7 +39,7 @@ public class OutboundGroupBuilder(
             var converter = converters.FirstOrDefault(c => c.CanHandle(type));
             if (converter == null) continue;
 
-            // 🚀 核心改动：获取校验结果
+            // 核心改动：获取校验结果
             var result = converter.Convert(p);
             
             // 优雅降级：如果失败，只打印日志，不中断程序，直接跳过处理下一个
