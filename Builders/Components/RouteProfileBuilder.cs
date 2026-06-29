@@ -20,7 +20,7 @@ public class RouteProfileBuilder(IOptions<AppSettings> options) : IConfigCompone
             CreateRemoteRuleSet("geosite-category-ai-!cn", "geosite", "category-ai-!cn"),
             CreateRemoteRuleSet("geosite-microsoft", "geosite", "microsoft"),
             CreateRemoteRuleSet("geosite-telegram", "geosite", "telegram"),
-            CreateRemoteRuleSet("geoip-telegram", "geoip", "telegram")
+            CreateRemoteRuleSet("geoip-telegram", "geoip", "tg")
         ]);
 
         var rules = new List<RouteRule>
@@ -78,7 +78,7 @@ public class RouteProfileBuilder(IOptions<AppSettings> options) : IConfigCompone
         Tag = tag,
         Type = "remote",
         Format = "binary",
-        Url = $"https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/{repoType}/{fileName}.srs",
+        Url = $"https://fastly.jsdelivr.net/gh/SagerNet/sing-{repoType}@rule-set/{fileName}.srs",
         DownloadDetour = appSettings.Direct,
         UpdateInterval = "1d"
     };
